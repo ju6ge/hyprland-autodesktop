@@ -1,0 +1,1223 @@
+==================================================================
+ZwlrOutputHeadV1 {
+    id: ObjectId(zwlr_output_head_v1@4278190080, 3),
+    version: 4,
+    data: Some(
+        ObjectData { .. },
+    ),
+    backend: WeakBackend {
+        inner: WeakInnerBackend {
+            state: (Weak),
+        },
+    },
+}
+Name {
+    name: "HDMI-A-1",
+}
+Description {
+    description: "Panasonic Industry Company PT-MZ670 0x08140141 (HDMI-A-1)",
+}
+PhysicalSize {
+    width: 2150,
+    height: 1350,
+}
+Make {
+    make: "Panasonic Industry Company",
+}
+Model {
+    model: "PT-MZ670",
+}
+SerialNumber {
+    serial_number: "0x08140141",
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190081, 4),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1200,
+}
+Refresh {
+    refresh: 59950,
+}
+Preferred
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190082, 5),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1080,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190083, 6),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1080,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190084, 7),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1080,
+}
+Refresh {
+    refresh: 59940,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190085, 8),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1080,
+}
+Refresh {
+    refresh: 50000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190086, 9),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1080,
+}
+Refresh {
+    refresh: 50000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190087, 10),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1080,
+}
+Refresh {
+    refresh: 24000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190088, 11),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1080,
+}
+Refresh {
+    refresh: 23976,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190089, 12),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1600,
+    height: 1200,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190090, 13),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1680,
+    height: 1050,
+}
+Refresh {
+    refresh: 59883,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190091, 14),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1400,
+    height: 1050,
+}
+Refresh {
+    refresh: 59948,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190092, 15),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1600,
+    height: 900,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190093, 16),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1280,
+    height: 1024,
+}
+Refresh {
+    refresh: 75025,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190094, 17),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1440,
+    height: 900,
+}
+Refresh {
+    refresh: 59901,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190095, 18),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1366,
+    height: 768,
+}
+Refresh {
+    refresh: 59790,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190096, 19),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1280,
+    height: 800,
+}
+Refresh {
+    refresh: 59910,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190097, 20),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1152,
+    height: 864,
+}
+Refresh {
+    refresh: 75000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190098, 21),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1280,
+    height: 720,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190099, 22),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1280,
+    height: 720,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190100, 23),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1280,
+    height: 720,
+}
+Refresh {
+    refresh: 59940,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190101, 24),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1280,
+    height: 720,
+}
+Refresh {
+    refresh: 50000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190102, 25),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1024,
+    height: 768,
+}
+Refresh {
+    refresh: 119989,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190103, 26),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1024,
+    height: 768,
+}
+Refresh {
+    refresh: 75029,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190104, 27),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1024,
+    height: 768,
+}
+Refresh {
+    refresh: 70069,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190105, 28),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1024,
+    height: 768,
+}
+Refresh {
+    refresh: 60004,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190106, 29),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 832,
+    height: 624,
+}
+Refresh {
+    refresh: 74551,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190107, 30),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 800,
+    height: 600,
+}
+Refresh {
+    refresh: 75000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190108, 31),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 800,
+    height: 600,
+}
+Refresh {
+    refresh: 72188,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190109, 32),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 800,
+    height: 600,
+}
+Refresh {
+    refresh: 60317,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190110, 33),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 800,
+    height: 600,
+}
+Refresh {
+    refresh: 56250,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190111, 34),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 720,
+    height: 576,
+}
+Refresh {
+    refresh: 50000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190112, 35),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 720,
+    height: 576,
+}
+Refresh {
+    refresh: 50000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190113, 36),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 720,
+    height: 480,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190114, 37),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 720,
+    height: 480,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190115, 38),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 720,
+    height: 480,
+}
+Refresh {
+    refresh: 59940,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190116, 39),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 720,
+    height: 480,
+}
+Refresh {
+    refresh: 59940,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190117, 40),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 640,
+    height: 480,
+}
+Refresh {
+    refresh: 75000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190118, 41),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 640,
+    height: 480,
+}
+Refresh {
+    refresh: 72809,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190119, 42),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 640,
+    height: 480,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190120, 43),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 640,
+    height: 480,
+}
+Refresh {
+    refresh: 59940,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190121, 44),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 640,
+    height: 480,
+}
+Refresh {
+    refresh: 59940,
+}
+Enabled {
+    enabled: 1,
+}
+CurrentMode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190081, 4),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Position {
+    x: 1920,
+    y: 0,
+}
+Transform {
+    transform: Value(
+        Normal,
+    ),
+}
+Scale {
+    scale: 1.0,
+}
+AdaptiveSync {
+    state: Value(
+        Disabled,
+    ),
+}
+==================================================================
+ZwlrOutputHeadV1 {
+    id: ObjectId(zwlr_output_head_v1@4278190122, 45),
+    version: 4,
+    data: Some(
+        ObjectData { .. },
+    ),
+    backend: WeakBackend {
+        inner: WeakInnerBackend {
+            state: (Weak),
+        },
+    },
+}
+Name {
+    name: "eDP-1",
+}
+Description {
+    description: "AU Optronics 0xD291 (eDP-1)",
+}
+PhysicalSize {
+    width: 300,
+    height: 190,
+}
+Make {
+    make: "AU Optronics",
+}
+Model {
+    model: "0xD291",
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190123, 46),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1200,
+}
+Refresh {
+    refresh: 60026,
+}
+Preferred
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190124, 47),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1920,
+    height: 1080,
+}
+Refresh {
+    refresh: 60026,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190125, 48),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1600,
+    height: 1200,
+}
+Refresh {
+    refresh: 60000,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190126, 49),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1680,
+    height: 1050,
+}
+Refresh {
+    refresh: 60026,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190127, 50),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1280,
+    height: 1024,
+}
+Refresh {
+    refresh: 60026,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190128, 51),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1440,
+    height: 900,
+}
+Refresh {
+    refresh: 60026,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190129, 52),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1280,
+    height: 800,
+}
+Refresh {
+    refresh: 60026,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190130, 53),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1280,
+    height: 720,
+}
+Refresh {
+    refresh: 60026,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190131, 54),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 1024,
+    height: 768,
+}
+Refresh {
+    refresh: 60026,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190132, 55),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 800,
+    height: 600,
+}
+Refresh {
+    refresh: 60026,
+}
+Mode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190133, 56),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Size {
+    width: 640,
+    height: 480,
+}
+Refresh {
+    refresh: 60026,
+}
+Enabled {
+    enabled: 1,
+}
+CurrentMode {
+    mode: ZwlrOutputModeV1 {
+        id: ObjectId(zwlr_output_mode_v1@4278190123, 46),
+        version: 4,
+        data: Some(
+            ObjectData { .. },
+        ),
+        backend: WeakBackend {
+            inner: WeakInnerBackend {
+                state: (Weak),
+            },
+        },
+    },
+}
+Position {
+    x: 0,
+    y: 1200,
+}
+Transform {
+    transform: Value(
+        Normal,
+    ),
+}
+Scale {
+    scale: 1.0,
+}
+AdaptiveSync {
+    state: Value(
+        Disabled,
+    ),
+}
