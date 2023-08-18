@@ -2,7 +2,7 @@ use std::{path::Path,
           collections::HashMap,
           env,
           os::unix::net::{UnixStream, UnixListener},
-          io::{Write, Read, BufReader, BufRead, BufWriter},
+          io::{Write, BufReader, BufRead, BufWriter},
           sync::{Arc, RwLock}
 };
 use clap::Parser;
@@ -62,9 +62,9 @@ impl Command {
     pub fn run(&self, buffer: &mut BufWriter<UnixStream>) {
         match self {
             Command::Attached => {
-                DAEMON_STATE.read().and_then(|daemon_state| {
-                    for (id, head) in  daemon_state.head_state.iter() {
-                        println!("attached");
+                let _ = DAEMON_STATE.read().and_then(|daemon_state| {
+                    let _ = writeln!(buffer, "Attached Monitors:");
+                    for (_id, head) in  daemon_state.head_state.iter() {
                         let _ = writeln!(buffer, "{}: {} {}\n", head.name(), head.make(), head.serial().as_ref().unwrap_or(&"".to_string()));
                         let _ = buffer.flush();
                     }
@@ -78,9 +78,9 @@ impl Command {
 }
 
 fn command_listener() {
-    UnixListener::bind(SOCKET_ADDR.as_str()).and_then(|socket_server| {
+    let _ = UnixListener::bind(SOCKET_ADDR.as_str()).and_then(|socket_server| {
       for connection in socket_server.incoming() {
-          connection.and_then(|mut stream| {
+          let _ = connection.and_then(|mut stream| {
               let reader = BufReader::new(&mut stream);
               let recv_command: Result<Command, Box<bincode::ErrorKind>> = bincode::deserialize_from(reader);
               match recv_command {
@@ -111,7 +111,7 @@ async fn main() {
                 println!("No daemon process is running at {}! Exiting", SOCKET_ADDR.as_str());
                 return;
             }
-            UnixStream::connect(SOCKET_ADDR.as_str()).and_then(|mut socket_stream| {
+            let _ = UnixStream::connect(SOCKET_ADDR.as_str()).and_then(|mut socket_stream| {
                 let _ = bincode::serialize(&command).and_then(|command_bin| {
                     let _ = socket_stream.write(&command_bin);
                     let _ = socket_stream.flush();

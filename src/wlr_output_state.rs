@@ -7,6 +7,7 @@ use wayland_client::{Connection, Dispatch, protocol::{wl_registry, wl_display::W
 use wayland_protocols_wlr::output_management::v1::client::{*, zwlr_output_head_v1::{ZwlrOutputHeadV1, AdaptiveSyncState}, zwlr_output_mode_v1::ZwlrOutputModeV1};
 
 #[derive(Builder, Debug, Clone, Getters)]
+#[allow(dead_code)]
 pub struct MonitorMode {
     #[builder(setter(into))]
     id: ObjectId,
@@ -190,7 +191,7 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
             zwlr_output_manager_v1::Event::Done { serial: _ } => {
                 state.finish_head();
 
-                state.wlr_tx.send(state.current_configuration.clone());
+                let _ = state.wlr_tx.send(state.current_configuration.clone());
             },
             zwlr_output_manager_v1::Event::Finished => {
                 println!("=========================================================\nFinished")
@@ -346,6 +347,6 @@ pub fn wayland_event_loop(wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInfor
     let mut state = ScreenManagerState::new(display, wlr_tx);
 
     while state.running {
-        wl_events.blocking_dispatch(&mut state);
+        let _ = wl_events.blocking_dispatch(&mut state);
     }
 }
