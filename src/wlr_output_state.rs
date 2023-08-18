@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
 use derive_builder::Builder;
+use derive_getters::Getters;
 use tokio::sync::mpsc::UnboundedSender;
 use wayland_client::{Connection, Dispatch, protocol::{wl_registry, wl_display::WlDisplay, wl_output::Transform}, Proxy, event_created_child, backend::ObjectId};
 use wayland_protocols_wlr::output_management::v1::client::{*, zwlr_output_head_v1::{ZwlrOutputHeadV1, AdaptiveSyncState}, zwlr_output_mode_v1::ZwlrOutputModeV1};
 
-#[derive(Builder, Debug, Clone)]
+#[derive(Builder, Debug, Clone, Getters)]
 pub struct MonitorMode {
     #[builder(setter(into))]
     id: ObjectId,
@@ -17,7 +18,7 @@ pub struct MonitorMode {
     preferred: bool,
 }
 
-#[derive(Builder, Debug, Clone)]
+#[derive(Builder, Debug, Clone, Getters)]
 pub struct MonitorInformation {
     #[builder(setter(into))]
     id: ObjectId,
@@ -49,12 +50,6 @@ pub struct MonitorInformation {
     modes: Vec<MonitorMode>,
 }
 
-impl MonitorInformation {
-    pub fn id(&self) -> ObjectId {
-        self.id.clone()
-    }
-}
-
 impl MonitorInformationBuilder {
     pub fn add_mode(&mut self, mode: MonitorMode) -> &mut Self {
         if let Some(ref mut modes) = self.modes.as_mut() {
@@ -69,7 +64,7 @@ impl MonitorInformationBuilder {
 
     pub fn from_value(monitor_information: &MonitorInformation) -> Self {
         Self {
-            id: Some(monitor_information.id()),
+            id: Some(monitor_information.id().clone()),
             name: Some(monitor_information.name.clone()),
             model: Some(monitor_information.model.clone()),
             make: Some(monitor_information.make.clone()),
@@ -151,7 +146,7 @@ impl ScreenManagerState {
         self.finish_mode();
         self.current_head.take().and_then(|hb|{
            hb.build().and_then(|h| {
-               self.current_configuration.insert(h.id(), h);
+               self.current_configuration.insert(h.id().clone(), h);
                Ok(())
            }).ok()
         });
