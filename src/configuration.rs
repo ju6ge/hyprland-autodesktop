@@ -1,8 +1,9 @@
 use std::{path::PathBuf, collections::BTreeMap};
+use derive_getters::Getters;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize,Deserialize,Debug)]
-enum ScreenRotation {
+pub enum ScreenRotation {
     Landscape,
     Portrait,
     LandscapeReversed,
@@ -10,7 +11,7 @@ enum ScreenRotation {
 }
 
 #[derive(Serialize,Deserialize,Debug)]
-enum ScreenPositionRelative {
+pub enum ScreenPositionRelative {
     Root,
     Over(String),
     Under(String),
@@ -23,8 +24,8 @@ enum ScreenPositionRelative {
 
 }
 
-#[derive(Serialize,Deserialize,Debug)]
-struct ScreenConfiguration {
+#[derive(Serialize,Deserialize,Debug, Getters)]
+pub struct ScreenConfiguration {
     identifier: String,
     scale: f32,
     rotation: ScreenRotation,
@@ -33,27 +34,28 @@ struct ScreenConfiguration {
     position: ScreenPositionRelative
 }
 
-#[derive(Serialize,Deserialize,Debug)]
-struct ScreensProfile {
+#[derive(Serialize,Deserialize,Debug, Getters)]
+pub struct ScreensProfile {
     screens: Vec<ScreenConfiguration>
 }
 
-#[derive(Serialize,Deserialize,Debug)]
-struct AppConfiguration {
+#[derive(Serialize,Deserialize,Debug, Getters)]
+pub struct AppConfiguration {
     profiles: BTreeMap<String, ScreensProfile>
+}
+
+impl Default for AppConfiguration {
+    fn default() -> Self {
+        Self { profiles: BTreeMap::new() }
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use std::{fs::File, io::Read, collections::BTreeMap};
 
     use crate::configuration::ScreensProfile;
 
-    use super::{AppConfiguration, ScreenConfiguration};
-
-    #[test]
-    fn parse_configuration() {
-    }
+    use super::{ScreenConfiguration};
 
     #[test]
     fn serialize() {

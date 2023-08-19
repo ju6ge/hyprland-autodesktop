@@ -1,11 +1,12 @@
-use std::{path::Path,
+use std::{path::{Path, PathBuf},
           collections::HashMap,
           env,
           os::unix::net::{UnixStream, UnixListener},
-          io::{Write, BufReader, BufRead, BufWriter},
-          sync::{Arc, RwLock}
+          io::{Write, BufReader, BufRead, BufWriter, Read},
+          sync::{Arc, RwLock}, fs::File, process
 };
 use clap::Parser;
+use configuration::AppConfiguration;
 use once_cell::sync::Lazy;
 use serde::{Serialize, Deserialize};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
@@ -27,12 +28,13 @@ static DAEMON_STATE : Lazy<Arc<RwLock<DaemonState>>> = Lazy::new(|| {
 });
 
 struct DaemonState {
-    head_state: HashMap<ObjectId, MonitorInformation>
+    head_state: HashMap<ObjectId, MonitorInformation>,
+    config: AppConfiguration
 }
 
 impl Default for DaemonState {
     fn default() -> Self {
-        Self { head_state: HashMap::new() }
+        Self { head_state: HashMap::new(), config: AppConfiguration::default() }
     }
 }
 
@@ -46,7 +48,10 @@ async fn connected_monitor_listen(mut wlr_rx: UnboundedReceiver<HashMap<ObjectId
 }
 
 #[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
 struct Options {
+    #[arg(short)]
+    config: Option<PathBuf>,
     #[command(subcommand)]
     command: Option<Command>
 }
@@ -54,6 +59,8 @@ struct Options {
 #[derive(Debug, Parser, Clone, Serialize, Deserialize)]
 enum Command {
     Attached,
+    Profiles,
+    Pid,
     Apply,
     Force
 }
@@ -71,6 +78,16 @@ impl Command {
                     Ok(())
                 });
             },
+            Command::Profiles => {
+                let _ = DAEMON_STATE.read().and_then(|daemon_state| {
+                    let _ = writeln!(buffer, "Profiles:");
+                    let _ = writeln!(buffer, "{}", serde_yaml::to_string(&daemon_state.config.profiles()).unwrap());
+                    Ok(())
+                });
+            }
+            Command::Pid => {
+                let _ = writeln!(buffer, "{}", process::id());
+            }
             Command::Apply => {},
             Command::Force => {},
         }
@@ -100,6 +117,21 @@ fn command_listener() {
     });
 }
 
+fn check_socket_alive() -> bool {
+    Path::new(SOCKET_ADDR.as_str()).exists() && UnixStream::connect(SOCKET_ADDR.as_str()).and_then(|mut con| {
+        let _ = bincode::serialize(&Command::Pid).and_then(|command_bin| {
+            let _ = con.write(&command_bin);
+            let _ = con.flush();
+            Ok(())
+        });
+        let mut resp = String::new();
+        let _ = con.read_to_string(&mut resp);
+        Ok(resp.trim().parse::<i32>().and_then(|_pid| {
+            Ok(true)
+        }).unwrap_or(false))
+    }).unwrap_or(false)
+}
+
 #[tokio::main]
 async fn main() {
     let cmd_options = Options::parse();
@@ -120,7 +152,7 @@ async fn main() {
                 let buffer = BufReader::new(socket_stream);
                 for line in buffer.lines() {
                     match line {
-                        Ok(l) => println!("{l}"),
+                        Ok(l) => if l.len() != 0 { println!("{l}"); }
                         Err(_) => {},
                     }
                 }
@@ -130,11 +162,22 @@ async fn main() {
 
         // programm running as deamon
         None => {
-            if Path::new(SOCKET_ADDR.as_str()).exists() {
-                println!("Deamon Process all ready running at {}! Exiting", SOCKET_ADDR.as_str());
-                return;
-            }
+            let config_path = cmd_options.config.unwrap_or(Path::new("workplaces.yml").into());
+            let _ = DAEMON_STATE.write().and_then(|mut daemon_state| {
+                let _ = File::open(config_path).and_then(|file_reader| {
+                    daemon_state.config = serde_yaml::from_reader(file_reader).expect("Could not parse workspace profiles!");
+                    Ok(())
+                });
+                Ok(())
+            });
 
+            let socket_path = Path::new(SOCKET_ADDR.as_str());
+            if check_socket_alive() {
+                println!("Daemon process is running at {}! Exiting", SOCKET_ADDR.as_str());
+                return;
+            } else if socket_path.exists() {
+                let _ = std::fs::remove_file(&socket_path);
+            }
 
             let (wlr_tx, wlr_rx) = mpsc::unbounded_channel::<HashMap<ObjectId, MonitorInformation>>();
             let wlr_output_updates_blocking = tokio::task::spawn_blocking(|| {
