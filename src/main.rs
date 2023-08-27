@@ -6,7 +6,7 @@ use std::{path::{Path, PathBuf},
           sync::{Arc, RwLock}, fs::File, process
 };
 use clap::Parser;
-use configuration::AppConfiguration;
+use configuration::{AppConfiguration, ScreensProfile};
 use once_cell::sync::Lazy;
 use serde::{Serialize, Deserialize};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
@@ -29,18 +29,33 @@ static DAEMON_STATE : Lazy<Arc<RwLock<DaemonState>>> = Lazy::new(|| {
 
 struct DaemonState {
     head_state: HashMap<ObjectId, MonitorInformation>,
-    config: AppConfiguration
+    config: AppConfiguration,
+    current_profile: Option<String>
 }
 
 impl Default for DaemonState {
     fn default() -> Self {
-        Self { head_state: HashMap::new(), config: AppConfiguration::default() }
+        Self {
+            head_state: HashMap::new(),
+            config: AppConfiguration::default(),
+            current_profile: None
+        }
     }
 }
 
 async fn connected_monitor_listen(mut wlr_rx: UnboundedReceiver<HashMap<ObjectId, MonitorInformation>>) {
     while let Some(current_connected_monitors) = wlr_rx.recv().await {
         let _ = DAEMON_STATE.clone().write().and_then(|mut daemon_state| {
+            if let Some((profile_name, profile)) = daemon_state.config.profiles().iter().filter_map(|(name, profile)| {
+                if profile.is_connected(&current_connected_monitors) {
+                    Some((name, profile))
+                } else {
+                    None
+                }
+            }).collect::<Vec<(&String, &ScreensProfile)>>().first() {
+                profile.apply(&current_connected_monitors, &daemon_state.config.hyprland_config_file());
+                daemon_state.current_profile = Some(profile_name.to_string());
+            }
             daemon_state.head_state = current_connected_monitors;
             Ok(())
         });
@@ -60,9 +75,9 @@ struct Options {
 enum Command {
     Attached,
     Profiles,
+    CurrentProfile,
     Pid,
-    Apply,
-    Force
+    Apply
 }
 
 impl Command {
@@ -89,7 +104,12 @@ impl Command {
                 let _ = writeln!(buffer, "{}", process::id());
             }
             Command::Apply => {},
-            Command::Force => {},
+            Command::CurrentProfile => {
+                let _ = DAEMON_STATE.read().and_then(|daemon_state| {
+                    let _ = writeln!(buffer, "Current Profiles: {}", daemon_state.current_profile.as_ref().unwrap_or(&"".to_string()));
+                    Ok(())
+                });
+            },
         }
     }
 }

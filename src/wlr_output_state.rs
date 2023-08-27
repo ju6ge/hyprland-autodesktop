@@ -264,9 +264,6 @@ impl Dispatch<zwlr_output_head_v1::ZwlrOutputHeadV1, ()> for ScreenManagerState 
                     builder.scale(scale);
                 }
             },
-            zwlr_output_head_v1::Event::Finished => {
-                println!("===================================\nFinished")
-            },
             zwlr_output_head_v1::Event::Make { make } => {
                 if let Some(ref mut builder) = app_state.current_head.as_mut() {
                     builder.make(make);
@@ -291,6 +288,9 @@ impl Dispatch<zwlr_output_head_v1::ZwlrOutputHeadV1, ()> for ScreenManagerState 
                         wayland_client::WEnum::Unknown(_) => { /* unknow nothing to do here */ },
                     }
                 }
+            },
+            zwlr_output_head_v1::Event::Finished => {
+                println!("===================================\nFinished")
             },
             _ => {},
         }
