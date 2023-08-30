@@ -194,7 +194,7 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
                 let _ = state.wlr_tx.send(state.current_configuration.clone());
             },
             zwlr_output_manager_v1::Event::Finished => {
-                println!("=========================================================\nFinished")
+                //println!("=========================================================\nFinished")
             },
             _ => { /* Nothing to do here */ },
         }
@@ -208,7 +208,7 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
 impl Dispatch<zwlr_output_head_v1::ZwlrOutputHeadV1, ()> for ScreenManagerState {
     fn event(
         app_state: &mut Self,
-        _proxy: &zwlr_output_head_v1::ZwlrOutputHeadV1,
+        head: &zwlr_output_head_v1::ZwlrOutputHeadV1,
         event: <zwlr_output_head_v1::ZwlrOutputHeadV1 as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
@@ -290,7 +290,7 @@ impl Dispatch<zwlr_output_head_v1::ZwlrOutputHeadV1, ()> for ScreenManagerState 
                 }
             },
             zwlr_output_head_v1::Event::Finished => {
-                println!("===================================\nFinished")
+                app_state.current_configuration.remove(&head.id());
             },
             _ => {},
         }
@@ -327,7 +327,7 @@ impl Dispatch<zwlr_output_mode_v1::ZwlrOutputModeV1, ()>  for ScreenManagerState
                 }
             },
             zwlr_output_mode_v1::Event::Finished => {
-                println!("============================================\nFinished");
+                //println!("============================================\nFinished");
             },
             _ => { /* Nothing to do here */ },
         }
