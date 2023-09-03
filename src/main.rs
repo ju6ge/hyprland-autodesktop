@@ -110,7 +110,7 @@ impl Command {
             Command::DDC => {
                 use ddc_hi::Display;
                 for mut display in Display::enumerate() {
-                    display.update_capabilities();
+                    let _ = display.update_capabilities();
                     let _ = writeln!(buffer, "{:?} {:?}", display.info.model_name, display.info.model_id);
                     let cap = display.handle.capabilities();
                     let _ = writeln!(buffer, "{:#?}", cap);

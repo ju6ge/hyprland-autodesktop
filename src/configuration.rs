@@ -1,4 +1,4 @@
-use std::{path::{PathBuf, Path}, collections::{BTreeMap, HashMap}, fs::File};
+use std::{path::{PathBuf, Path}, collections::{BTreeMap, HashMap}, fs::File, process::Command};
 use derive_getters::Getters;
 use serde::{Serialize, Deserialize};
 use id_tree::{TreeBuilder, Tree, Node, NodeId};
@@ -145,7 +145,8 @@ impl ScreensProfile {
         for (ident, (_conf, _info)) in monitor_map.iter() {
             add_node_to_tree(ident, &mut position_tree, &monitor_map, &mut already_added);
         }
-
+        
+        // collect settings required to configure hyprland
         struct HyprlandMonitor {
             enabled: bool,
             name: String,
@@ -172,15 +173,17 @@ impl ScreensProfile {
                 rotation: conf.rotation().transform_id(),
             });
         }
+        
+        // repostion montiors so that all coordinates are postive (why hyprland?)
         let min_pos_x = hyprland_monitors.iter().map(|hm| { hm.pos_x }).min().unwrap();
         let min_pos_y = hyprland_monitors.iter().map(|hm| { hm.pos_y }).min().unwrap();
-
         hyprland_monitors = hyprland_monitors.into_iter().map(|mut hm| {
             hm.pos_x -= min_pos_x;
             hm.pos_y -= min_pos_y;
             hm
         }).collect();
 
+        // write hyprland configuration file
         let mut hyprland_monitor_config = File::create(hyprland_config_file).unwrap();
         for hm in hyprland_monitors {
             if hm.enabled {
@@ -201,6 +204,13 @@ impl ScreensProfile {
                             name = hm.name
                          ).unwrap();
             }
+        }
+        
+        // run commands that where defined
+        for cmd in &self.skripts {
+            let args = cmd.split(' ').collect::<Vec<&str>>();
+            let out = Command::new(args[0]).args(&args[1..]).output().unwrap();
+            println!("{out:#?}");
         }
     }
 }
