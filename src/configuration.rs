@@ -1,7 +1,8 @@
-use std::{path::{PathBuf, Path}, collections::{BTreeMap, HashMap}};
+use std::{path::{PathBuf, Path}, collections::{BTreeMap, HashMap}, fs::File};
 use derive_getters::Getters;
 use serde::{Serialize, Deserialize};
 use id_tree::{TreeBuilder, Tree, Node, NodeId};
+use std::io::Write;
 use wayland_client::backend::ObjectId;
 
 use crate::wlr_output_state::MonitorInformation;
@@ -9,9 +10,41 @@ use crate::wlr_output_state::MonitorInformation;
 #[derive(Serialize,Deserialize,Debug)]
 pub enum ScreenRotation {
     Landscape,
-    Portrait,
     LandscapeReversed,
+    Portrait,
     PortraitReversed
+}
+
+impl ScreenRotation {
+    pub fn transform_size(&self, size: (i32, i32)) -> (i32, i32) {
+        match self {
+            ScreenRotation::Landscape |
+            ScreenRotation::LandscapeReversed => {
+               size
+            },
+            ScreenRotation::Portrait |
+            ScreenRotation::PortraitReversed => {
+                (size.1, size.0)
+            },
+        }
+    }
+
+    pub fn transform_id(&self) -> u8 {
+        match self {
+            ScreenRotation::Landscape  => {
+                0
+            },
+            ScreenRotation::LandscapeReversed => {
+                2
+            },
+            ScreenRotation::Portrait => {
+                1
+            },
+            ScreenRotation::PortraitReversed => {
+                3
+            },
+        }
+    }
 }
 
 #[derive(Serialize,Deserialize,Debug)]
@@ -43,9 +76,23 @@ impl ScreenPositionRelative {
         }
        }
     }
+
+    pub fn offset(&self, parent_size: (i32, i32), own_size: (i32, i32)) -> (i32, i32) {
+        match self {
+            ScreenPositionRelative::Root => (0, 0),
+            ScreenPositionRelative::Over(_) => (0, -1*own_size.1),
+            ScreenPositionRelative::Under(_) => (0, parent_size.1),
+            ScreenPositionRelative::Left(_) => (-1*own_size.0, 0),
+            ScreenPositionRelative::Right(_) => (parent_size.0, 0),
+            ScreenPositionRelative::LeftOver(_) => (-1*own_size.0, -1 * own_size.1),
+            ScreenPositionRelative::LeftUnder(_) => (-1*own_size.0, parent_size.1),
+            ScreenPositionRelative::RightOver(_) => (parent_size.0, -1 * own_size.1),
+            ScreenPositionRelative::RightUnder(_) => (parent_size.0, parent_size.1),
+        }
+    }
 }
 
-#[derive(Serialize,Deserialize,Debug, Getters)]
+#[derive(Serialize,Deserialize,Debug,Getters)]
 pub struct ScreenConfiguration {
     identifier: String,
     scale: f32,
@@ -56,9 +103,11 @@ pub struct ScreenConfiguration {
     enabled: bool
 }
 
-#[derive(Serialize,Deserialize,Debug, Getters)]
+#[derive(Serialize,Deserialize,Debug,Getters)]
 pub struct ScreensProfile {
-    screens: Vec<ScreenConfiguration>
+    screens: Vec<ScreenConfiguration>,
+    #[serde(default)]
+    skripts: Vec<String>
 }
 
 impl ScreensProfile {
@@ -79,7 +128,7 @@ impl ScreensProfile {
         connected
     }
 
-    pub fn apply(&self, head_config: &HashMap<ObjectId, MonitorInformation>, _hyprland_confi_file: &Path) {
+    pub fn apply(&self, head_config: &HashMap<ObjectId, MonitorInformation>, hyprland_config_file: &Path) {
         // match connected monitor information with profile monitor configuration
         let mut monitor_map: BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation)> = BTreeMap::new();
         for screen in &self.screens {
@@ -96,10 +145,94 @@ impl ScreensProfile {
         for (ident, (_conf, _info)) in monitor_map.iter() {
             add_node_to_tree(ident, &mut position_tree, &monitor_map, &mut already_added);
         }
-        let mut display = String::new();
-        position_tree.write_formatted(&mut display);
-        println!("{display}");
+
+        struct HyprlandMonitor {
+            enabled: bool,
+            name: String,
+            width: i32,
+            height: i32,
+            fps: f64,
+            pos_x: i32,
+            pos_y: i32,
+            scale: f32,
+            rotation: u8
+        }
+        let mut hyprland_monitors = Vec::new();
+        for (ident, (conf, info)) in monitor_map.iter() {
+            let position = calc_screen_pixel_positon(ident, &position_tree, &monitor_map);
+            hyprland_monitors.push(HyprlandMonitor{
+                enabled: *conf.enabled(),
+                name: info.name().to_string(),
+                width: info.preffered_mode().size().0,
+                height: info.preffered_mode().size().1,
+                fps: info.preffered_mode().refresh()/1000.,
+                pos_x: position.0,
+                pos_y: position.1,
+                scale: *conf.scale(),
+                rotation: conf.rotation().transform_id(),
+            });
+        }
+        let min_pos_x = hyprland_monitors.iter().map(|hm| { hm.pos_x }).min().unwrap();
+        let min_pos_y = hyprland_monitors.iter().map(|hm| { hm.pos_y }).min().unwrap();
+
+        hyprland_monitors = hyprland_monitors.into_iter().map(|mut hm| {
+            hm.pos_x -= min_pos_x;
+            hm.pos_y -= min_pos_y;
+            hm
+        }).collect();
+
+        let mut hyprland_monitor_config = File::create(hyprland_config_file).unwrap();
+        for hm in hyprland_monitors {
+            if hm.enabled {
+                writeln!(&mut hyprland_monitor_config,
+                        "monitor={name},{width}x{height}@{fps},{pos_x}x{pos_y},{scale},transform,{rotation}",
+                        name = hm.name,
+                        width = hm.width,
+                        height = hm.height,
+                        fps = hm.fps,
+                        pos_x = hm.pos_x,
+                        pos_y = hm.pos_y,
+                        scale = hm.scale,
+                        rotation = hm.rotation
+                ).unwrap();
+            } else {
+                writeln!(&mut hyprland_monitor_config,
+                            "monitor={name},disabled",
+                            name = hm.name
+                         ).unwrap();
+            }
+        }
     }
+}
+
+
+fn calc_screen_pixel_positon(ident: &str, position_tree: &Tree<&str>, monitor_map: &BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation)>) -> (i32, i32){
+    let root_node_id = position_tree.root_node_id().unwrap();
+    let current_node_id = find_nodeid_from_ident(ident, position_tree).unwrap();
+    position_tree.get(&current_node_id).and_then(|current_node| {
+        if current_node.parent().unwrap() == root_node_id {
+            // if multiple screens are attached to root then the profile is broken and the resulting configuration may look broken!
+            Ok((0, 0))
+        } else {
+            let parent_ident = position_tree.get(current_node.parent().unwrap()).unwrap().data();
+            let parent_position = calc_screen_pixel_positon(&parent_ident, position_tree, monitor_map);
+            let (conf, info) = monitor_map.get(ident).unwrap();
+            let (parent_conf, parent_info) = monitor_map.get(parent_ident).unwrap();
+            let parent_size = if parent_conf.enabled { parent_conf.rotation().transform_size(*parent_info.preffered_mode().size()) } else { (0, 0) };
+            let own_size = if conf.enabled { conf.rotation().transform_size(*info.preffered_mode().size()) } else { (0,0) };
+            let offset = conf.position().offset(parent_size, own_size);
+            Ok((parent_position.0 + offset.0, parent_position.1 + offset.1))
+        }
+    }).unwrap()
+}
+
+fn find_nodeid_from_ident(ident: &str, position_tree: &Tree<&str>) -> Option<NodeId> {
+    for node_id in position_tree.traverse_level_order_ids(position_tree.root_node_id().unwrap()).unwrap() {
+        if position_tree.get(&node_id).unwrap().data() == &ident {
+            return Some(node_id.clone());
+        }
+    }
+    None
 }
 
 fn add_node_to_tree<'a>(ident: &'a str, position_tree: &mut Tree<&'a str>, monitor_map: &BTreeMap<&'a str, (&'a ScreenConfiguration, &'a MonitorInformation)>, already_added: &mut Vec<&'a str>) -> Option<NodeId> {
@@ -133,12 +266,7 @@ fn add_node_to_tree<'a>(ident: &'a str, position_tree: &mut Tree<&'a str>, monit
             }
         })
     } else {
-        for node_id in position_tree.traverse_level_order_ids(position_tree.root_node_id().unwrap()).unwrap() {
-            if position_tree.get(&node_id).unwrap().data() == &ident {
-                return Some(node_id.clone());
-            }
-        }
-        None
+        find_nodeid_from_ident(ident, position_tree)
     }
 }
 

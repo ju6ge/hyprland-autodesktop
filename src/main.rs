@@ -76,6 +76,7 @@ enum Command {
     Attached,
     Profiles,
     CurrentProfile,
+    DDC,
     Pid,
     Apply
 }
@@ -99,17 +100,27 @@ impl Command {
                     let _ = writeln!(buffer, "{}", serde_yaml::to_string(&daemon_state.config.profiles()).unwrap());
                     Ok(())
                 });
-            }
-            Command::Pid => {
-                let _ = writeln!(buffer, "{}", process::id());
-            }
-            Command::Apply => {},
+            },
             Command::CurrentProfile => {
                 let _ = DAEMON_STATE.read().and_then(|daemon_state| {
                     let _ = writeln!(buffer, "Current Profiles: {}", daemon_state.current_profile.as_ref().unwrap_or(&"".to_string()));
                     Ok(())
                 });
             },
+            Command::DDC => {
+                use ddc_hi::Display;
+                for mut display in Display::enumerate() {
+                    display.update_capabilities();
+                    let _ = writeln!(buffer, "{:?} {:?}", display.info.model_name, display.info.model_id);
+                    let cap = display.handle.capabilities();
+                    let _ = writeln!(buffer, "{:#?}", cap);
+                }
+                let _ = writeln!(buffer, "=================================================");
+            },
+            Command::Pid => {
+                let _ = writeln!(buffer, "{}", process::id());
+            },
+            Command::Apply => {},
         }
     }
 }

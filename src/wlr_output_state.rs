@@ -51,6 +51,31 @@ pub struct MonitorInformation {
     modes: Vec<MonitorMode>,
 }
 
+impl MonitorInformation {
+    pub fn preffered_mode(&self) -> &MonitorMode {
+        for mode in &self.modes {
+            if *mode.preferred() {
+                return mode;
+            }
+        }
+        // if no mode is preffered return the first one
+        &self.modes[0]
+    }
+
+    pub fn biggest_mode(&self) -> &MonitorMode {
+        let mut biggest_mode: &MonitorMode = &self.modes[0];
+        for mode in &self.modes {
+           if biggest_mode.size().0 < mode.size().0 {
+               biggest_mode = mode;
+           }
+           if biggest_mode.size().0 == mode.size().0 && biggest_mode.size().1 > mode.size().1 {
+               biggest_mode = mode;
+           }
+        }
+        biggest_mode
+    }
+}
+
 impl MonitorInformationBuilder {
     pub fn add_mode(&mut self, mode: MonitorMode) -> &mut Self {
         if let Some(ref mut modes) = self.modes.as_mut() {
@@ -182,7 +207,7 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
         event: <zwlr_output_manager_v1::ZwlrOutputManagerV1 as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        _qhandle: &wayland_client::QueueHandle<Self>,
+        qhandle: &wayland_client::QueueHandle<Self>,
     ) {
         match event {
             zwlr_output_manager_v1::Event::Head { head } => {
