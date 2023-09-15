@@ -5,8 +5,10 @@ use std::{path::{Path, PathBuf},
           io::{Write, BufReader, BufRead, BufWriter, Read},
           sync::{Arc, RwLock}, fs::File, process
 };
+use futures::{future::BoxFuture, FutureExt};
 use clap::Parser;
 use configuration::{AppConfiguration, ScreensProfile};
+use ddc::DdcMonitor;
 use once_cell::sync::Lazy;
 use serde::{Serialize, Deserialize};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
@@ -15,6 +17,7 @@ use wlr_output_state::MonitorInformation;
 
 mod wlr_output_state;
 mod configuration;
+mod ddc;
 
 static SOCKET_ADDR : Lazy<String> = Lazy::new(|| {
     env::var("XDG_RUNTIME_DIR")
@@ -30,7 +33,8 @@ static DAEMON_STATE : Lazy<Arc<RwLock<DaemonState>>> = Lazy::new(|| {
 struct DaemonState {
     head_state: HashMap<ObjectId, MonitorInformation>,
     config: AppConfiguration,
-    current_profile: Option<String>
+    current_profile: Option<String>,
+    ddc_connections: HashMap<ObjectId, DdcMonitor>
 }
 
 impl Default for DaemonState {
@@ -38,27 +42,69 @@ impl Default for DaemonState {
         Self {
             head_state: HashMap::new(),
             config: AppConfiguration::default(),
-            current_profile: None
+            current_profile: None,
+            ddc_connections: HashMap::new()
         }
     }
 }
 
-async fn connected_monitor_listen(mut wlr_rx: UnboundedReceiver<HashMap<ObjectId, MonitorInformation>>) {
-    while let Some(current_connected_monitors) = wlr_rx.recv().await {
-        let _ = DAEMON_STATE.clone().write().and_then(|mut daemon_state| {
-            if let Some((profile_name, profile)) = daemon_state.config.profiles().iter().filter_map(|(name, profile)| {
-                if profile.is_connected(&current_connected_monitors) {
-                    Some((name, profile))
-                } else {
-                    None
+fn get_newest_message<'a>(wlr_rx: &'a mut UnboundedReceiver<HashMap<ObjectId, MonitorInformation>>) -> BoxFuture<'a, Result<HashMap<ObjectId, MonitorInformation>, mpsc::error::TryRecvError>> {
+    async move {
+        match wlr_rx.try_recv() {
+            Ok(head_config) => {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                match get_newest_message(wlr_rx).await {
+                    Ok(newer_head_conifg) => Ok(newer_head_conifg),
+                    Err(_) => Ok(head_config),
                 }
-            }).collect::<Vec<(&String, &ScreensProfile)>>().first() {
-                profile.apply(&current_connected_monitors, &daemon_state.config.hyprland_config_file());
-                daemon_state.current_profile = Some(profile_name.to_string());
-            }
-            daemon_state.head_state = current_connected_monitors;
-            Ok(())
-        });
+            },
+            Err(err) => Err(err),
+        }
+    }.boxed()
+}
+
+async fn connected_monitor_listen(mut wlr_rx: UnboundedReceiver<HashMap<ObjectId, MonitorInformation>>) {
+    loop {
+        if let Some(current_connected_monitors) = get_newest_message(&mut wlr_rx).await.ok() {
+            // run this in its own thread te make sure the runtime does not get blocked!
+            let _ = tokio::task::spawn_blocking(|| {
+                let _ = DAEMON_STATE.clone().write().and_then(|mut daemon_state| {
+                    // add ddc connections to daemon state
+                    for (id, monitor_info) in &current_connected_monitors {
+                        if let Some(serial) = monitor_info.serial() {
+                            if !daemon_state.ddc_connections.contains_key(&id) {
+                                DdcMonitor::get_display_by_serial(&serial).and_then(|display| {
+                                    daemon_state.ddc_connections.insert(id.clone(), display);
+                                    Some(())
+                                });
+                            }
+                        }
+                    }
+                    // delete ddc connections to monitors that where disconnected
+                    let keys = daemon_state.ddc_connections.keys().map(|id| id.clone()).collect::<Vec<_>>();
+                    for id in keys {
+                        if !current_connected_monitors.contains_key(&id) {
+                            daemon_state.ddc_connections.remove(&id);
+                        }
+                    }
+
+                    if let Some((profile_name, profile)) = daemon_state.config.clone().profiles().iter().filter_map(|(name, profile)| {
+                        if profile.is_connected(&current_connected_monitors, &mut daemon_state.ddc_connections) {
+                            Some((name, profile))
+                        } else {
+                            None
+                        }
+                    }).collect::<Vec<(&String, &ScreensProfile)>>().first() {
+                        let hyprland_config_file = daemon_state.config.hyprland_config_file().clone();
+                        profile.apply(&current_connected_monitors,&mut daemon_state.ddc_connections, &hyprland_config_file);
+                        daemon_state.current_profile = Some(profile_name.to_string());
+                    }
+                    daemon_state.head_state = current_connected_monitors;
+                    Ok(())
+                });
+            }).await;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 }
 
@@ -76,7 +122,7 @@ enum Command {
     Attached,
     Profiles,
     CurrentProfile,
-    DDC,
+    MonitorInputs,
     Pid,
     Apply
 }
@@ -103,19 +149,25 @@ impl Command {
             },
             Command::CurrentProfile => {
                 let _ = DAEMON_STATE.read().and_then(|daemon_state| {
-                    let _ = writeln!(buffer, "Current Profiles: {}", daemon_state.current_profile.as_ref().unwrap_or(&"".to_string()));
+                    let _ = writeln!(buffer, "Current Profile: {}", daemon_state.current_profile.as_ref().unwrap_or(&"".to_string()));
                     Ok(())
                 });
             },
-            Command::DDC => {
-                use ddc_hi::Display;
-                for mut display in Display::enumerate() {
-                    let _ = display.update_capabilities();
-                    let _ = writeln!(buffer, "{:?} {:?}", display.info.model_name, display.info.model_id);
-                    let cap = display.handle.capabilities();
-                    let _ = writeln!(buffer, "{:#?}", cap);
-                }
-                let _ = writeln!(buffer, "=================================================");
+            Command::MonitorInputs => {
+                let _ = DAEMON_STATE.write().and_then(|mut daemon_state| {
+                    let connected_ddc_monitors = daemon_state.ddc_connections.keys().map(|object_id| object_id.clone()).collect::<Vec<_>>();
+                    for object_id in connected_ddc_monitors {
+                        let monitor_info = daemon_state.head_state.get(&object_id).unwrap().clone();
+                        daemon_state.ddc_connections.get_mut(&object_id).and_then(|ref mut display| {
+                            display.get_input_source().and_then(|input_soucre| {
+                                let _ = writeln!(buffer ,"{}: {:?}", monitor_info.name(), input_soucre);
+                                let _ = buffer.flush();
+                                Some(())
+                            })
+                        });
+                    }
+                    Ok(())
+                });
             },
             Command::Pid => {
                 let _ = writeln!(buffer, "{}", process::id());

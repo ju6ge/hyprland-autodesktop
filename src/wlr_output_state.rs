@@ -62,6 +62,7 @@ impl MonitorInformation {
         &self.modes[0]
     }
 
+    #[allow(dead_code)]
     pub fn biggest_mode(&self) -> &MonitorMode {
         let mut biggest_mode: &MonitorMode = &self.modes[0];
         for mode in &self.modes {
@@ -124,7 +125,7 @@ impl ScreenManagerState {
             running: true,
             _display: display,
             output_manager: None,
-            wlr_tx: wlr_tx,
+            wlr_tx,
             current_head: None,
             current_mode: None,
             current_configuration: HashMap::new()
@@ -207,7 +208,7 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
         event: <zwlr_output_manager_v1::ZwlrOutputManagerV1 as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        qhandle: &wayland_client::QueueHandle<Self>,
+        _qhandle: &wayland_client::QueueHandle<Self>,
     ) {
         match event {
             zwlr_output_manager_v1::Event::Head { head } => {

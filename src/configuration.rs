@@ -5,9 +5,9 @@ use id_tree::{TreeBuilder, Tree, Node, NodeId};
 use std::io::Write;
 use wayland_client::backend::ObjectId;
 
-use crate::wlr_output_state::MonitorInformation;
+use crate::{wlr_output_state::MonitorInformation, ddc::{MonitorInputSource, DdcMonitor}};
 
-#[derive(Serialize,Deserialize,Debug)]
+#[derive(Serialize,Deserialize,Debug, Clone)]
 pub enum ScreenRotation {
     Landscape,
     LandscapeReversed,
@@ -47,7 +47,7 @@ impl ScreenRotation {
     }
 }
 
-#[derive(Serialize,Deserialize,Debug)]
+#[derive(Serialize,Deserialize,Debug, Clone)]
 pub enum ScreenPositionRelative {
     Root,
     Over(String),
@@ -92,18 +92,18 @@ impl ScreenPositionRelative {
     }
 }
 
-#[derive(Serialize,Deserialize,Debug,Getters)]
+#[derive(Serialize,Deserialize,Debug,Getters, Clone)]
 pub struct ScreenConfiguration {
     identifier: String,
     scale: f32,
     rotation: ScreenRotation,
-    display_output_code: Option<u32>,
+    display_output_code: Option<MonitorInputSource>,
     wallpaper: PathBuf,
     position: ScreenPositionRelative,
     enabled: bool
 }
 
-#[derive(Serialize,Deserialize,Debug,Getters)]
+#[derive(Serialize,Deserialize,Debug,Getters, Clone)]
 pub struct ScreensProfile {
     screens: Vec<ScreenConfiguration>,
     #[serde(default)]
@@ -111,13 +111,31 @@ pub struct ScreensProfile {
 }
 
 impl ScreensProfile {
-    pub fn is_connected(&self, head_config: &HashMap<ObjectId, MonitorInformation>) -> bool {
+    pub fn is_connected(&self, head_config: &HashMap<ObjectId, MonitorInformation>, ddc_connections: &mut HashMap<ObjectId, DdcMonitor>) -> bool {
         let mut connected = true;
         for screen in &self.screens {
             let mut screen_found = false;
-            for (_id, monitor_info) in head_config.iter() {
+            for (id, monitor_info) in head_config.iter() {
                 if screen.identifier() == monitor_info.name() || screen.identifier() ==  &format!("{} {}", monitor_info.make(), monitor_info.serial().as_ref().unwrap_or(&"".to_string())){
-                    screen_found = true;
+                    if let Some(ref mut display) = ddc_connections.get_mut(id) {
+                        let current_source = display.get_input_source();
+                        if current_source.is_some() && screen.display_output_code.is_some() {
+                            let configured_source = screen.display_output_code.as_ref().unwrap();
+                            let current_source = current_source.unwrap();
+                            if current_source == *configured_source {
+                                screen_found = true;
+                                break;
+                            }
+                        } else {
+                            // if no input source can be read assume monitor is set to correct input or if no input is configured for the screen
+                            screen_found = true;
+                            break;
+                        }
+                    } else {
+                        // if no ddc connection exist to the monitor assume if is set to the correct input (this should only happen for laptop displays)
+                        screen_found = true;
+                        break;
+                    }
                 }
             }
             if !screen_found {
@@ -128,7 +146,7 @@ impl ScreensProfile {
         connected
     }
 
-    pub fn apply(&self, head_config: &HashMap<ObjectId, MonitorInformation>, hyprland_config_file: &Path) {
+    pub fn apply(&self, head_config: &HashMap<ObjectId, MonitorInformation>, ddc_connections: &mut HashMap<ObjectId, DdcMonitor>, hyprland_config_file: &Path) {
         // match connected monitor information with profile monitor configuration
         let mut monitor_map: BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation)> = BTreeMap::new();
         for screen in &self.screens {
@@ -158,6 +176,7 @@ impl ScreensProfile {
             scale: f32,
             rotation: u8
         }
+
         let mut hyprland_monitors = Vec::new();
         for (ident, (conf, info)) in monitor_map.iter() {
             let position = calc_screen_pixel_positon(ident, &position_tree, &monitor_map);
@@ -209,8 +228,7 @@ impl ScreensProfile {
         // run commands that where defined
         for cmd in &self.skripts {
             let args = cmd.split(' ').collect::<Vec<&str>>();
-            let out = Command::new(args[0]).args(&args[1..]).output().unwrap();
-            println!("{out:#?}");
+            let _out = Command::new(args[0]).args(&args[1..]).output().unwrap();
         }
     }
 }
@@ -248,7 +266,7 @@ fn find_nodeid_from_ident(ident: &str, position_tree: &Tree<&str>) -> Option<Nod
 fn add_node_to_tree<'a>(ident: &'a str, position_tree: &mut Tree<&'a str>, monitor_map: &BTreeMap<&'a str, (&'a ScreenConfiguration, &'a MonitorInformation)>, already_added: &mut Vec<&'a str>) -> Option<NodeId> {
     // if monitor was already added do not add it again!
     if !already_added.contains(&ident) {
-        monitor_map.get(&ident).and_then(|(conf, info)| {
+        monitor_map.get(&ident).and_then(|(conf, _info)| {
             let parent_ident = conf.position().parent();
             match parent_ident {
                 Some(parent) => {
@@ -280,7 +298,7 @@ fn add_node_to_tree<'a>(ident: &'a str, position_tree: &mut Tree<&'a str>, monit
     }
 }
 
-#[derive(Serialize,Deserialize,Debug, Getters)]
+#[derive(Serialize,Deserialize,Debug,Getters,Clone)]
 pub struct AppConfiguration {
     hyprland_config_file: PathBuf,
     profiles: BTreeMap<String, ScreensProfile>
