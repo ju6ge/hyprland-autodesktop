@@ -117,6 +117,11 @@ struct Options {
     command: Option<Command>
 }
 
+#[derive(Debug, Parser, Serialize, Deserialize, Clone)]
+struct ProfileSelector {
+    name: String
+}
+
 #[derive(Debug, Parser, Clone, Serialize, Deserialize)]
 enum Command {
     Attached,
@@ -124,7 +129,7 @@ enum Command {
     CurrentProfile,
     MonitorInputs,
     Pid,
-    Apply
+    Apply(ProfileSelector)
 }
 
 impl Command {
@@ -172,7 +177,22 @@ impl Command {
             Command::Pid => {
                 let _ = writeln!(buffer, "{}", process::id());
             },
-            Command::Apply => {},
+            Command::Apply(profile_selector) => {
+                let _ = DAEMON_STATE.write().and_then(|mut daemon_state| {
+                    match daemon_state.config.clone().profiles().get(&profile_selector.name) {
+                        Some(profile) => {
+                            let head_config = daemon_state.head_state.clone();
+                            let hyprland_config_file = daemon_state.config.hyprland_config_file().clone();
+                            profile.apply(&head_config, &mut daemon_state.ddc_connections, &hyprland_config_file);
+                            daemon_state.current_profile = Some(profile_selector.name.clone());
+                        },
+                        None => {
+                            let _ = writeln!(buffer, "No profile with name {}!", profile_selector.name);
+                        },
+                    }
+                    Ok(())
+                });
+            },
         }
     }
 }

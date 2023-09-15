@@ -150,8 +150,22 @@ impl ScreensProfile {
         // match connected monitor information with profile monitor configuration
         let mut monitor_map: BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation)> = BTreeMap::new();
         for screen in &self.screens {
-            for (_id, monitor_info) in head_config.iter() {
+            for (id, monitor_info) in head_config.iter() {
                 if screen.identifier() == monitor_info.name() || screen.identifier() ==  &format!("{} {}", monitor_info.make(), monitor_info.serial().as_ref().unwrap_or(&"".to_string())){
+                    // if the display has ddc and its input is set differently then required by the profile update the input of the monitor
+                    if let Some(configured_input) = &screen.display_output_code {
+                        ddc_connections.get_mut(id).and_then(|ref mut display| {
+                            match display.get_input_source() {
+                                Some(current_input) => {
+                                    if current_input != *configured_input {
+                                        let _ = display.set_input_souce(configured_input);
+                                    }
+                                },
+                                None => { /* do nothing, assume monitor is set to correct input */ },
+                            }
+                            Some(())
+                        });
+                    }
                     monitor_map.insert(screen.identifier(), (screen, monitor_info));
                 }
             }
