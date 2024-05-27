@@ -11,7 +11,7 @@ use std::{
 };
 use wayland_client::backend::ObjectId;
 
-use crate::{ddc::MonitorInputSource, wlr_output_state::MonitorInformation};
+use crate::{ddc::MonitorInputSourceMatcher, wlr_output_state::MonitorInformation};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ScreenRotation {
@@ -87,7 +87,8 @@ pub struct ScreenConfiguration {
     identifier: String,
     scale: f32,
     rotation: ScreenRotation,
-    display_output_code: Option<MonitorInputSource>,
+    #[serde(default)]
+    display_output_code: MonitorInputSourceMatcher,
     wallpaper: PathBuf,
     position: ScreenPositionRelative,
     enabled: bool,
@@ -117,23 +118,18 @@ impl ScreensProfile {
                     if let Some(ref mut display) = Monitor::enumerate()
                         .find(|monitor| *monitor_info.name() == monitor.handle.name())
                     {
-                        let current_source = display.get_input_source();
-                        if current_source.is_ok() && screen.display_output_code.is_some() {
-                            let configured_source = screen.display_output_code.as_ref().unwrap();
-                            let current_source = current_source.unwrap();
-                            if current_source == *configured_source.input() {
-                                screen_found = true;
-                                break;
-                            }
-                        } else {
+                        let source = display.get_input_source();
+                        if source.as_ref().is_ok_and(|current_source| {
+                            let configured_source = &screen.display_output_code;
+                            configured_source.matches(*current_source)
+                        }) {
+                            screen_found = true;
+                            break;
+                        } else if source.is_err()  {
                             // if no input source can be read assume monitor is set to correct input or if no input is configured for the screen
                             screen_found = true;
                             break;
                         }
-                    } else {
-                        // if no ddc connection exist to the monitor assume if is set to the correct input (this should only happen for laptop displays)
-                        screen_found = true;
-                        break;
                     }
                 }
             }
