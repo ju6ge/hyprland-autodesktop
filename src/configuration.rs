@@ -1,5 +1,6 @@
 use derive_getters::Getters;
 use id_tree::{Node, NodeId, Tree, TreeBuilder};
+use libmonitor::mccs::features::InputSource;
 use libmonitor::{ddc::DdcDevice, Monitor};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -102,7 +103,8 @@ pub struct ScreensProfile {
 }
 
 impl ScreensProfile {
-    pub fn is_connected(&self, head_config: &HashMap<ObjectId, MonitorInformation>) -> bool {
+    /// check if a profile matches the current screens connected to the device
+    pub fn is_connected(&self, head_config: &HashMap<ObjectId, MonitorInformation>, current_monitor_inputs: &BTreeMap<String, InputSource>) -> bool {
         let mut connected = true;
         for screen in &self.screens {
             let mut screen_found = false;
@@ -115,21 +117,20 @@ impl ScreensProfile {
                             monitor_info.serial().as_ref().unwrap_or(&"".to_string())
                         )
                 {
-                    if let Some(ref mut display) = Monitor::enumerate()
-                        .find(|monitor| *monitor_info.name() == monitor.handle.name())
+                    if let Some(source) = current_monitor_inputs.get(monitor_info.name())
                     {
-                        let source = display.get_input_source();
-                        if source.as_ref().is_ok_and(|current_source| {
-                            let configured_source = &screen.display_output_code;
-                            configured_source.matches(*current_source)
-                        }) {
-                            screen_found = true;
-                            break;
-                        } else if source.is_err()  {
-                            // if no input source can be read assume monitor is set to correct input or if no input is configured for the screen
+                        // if we have information about the current monitor selected input
+                        // then only consider it connected if the profiles input matches
+                        // the currently active one
+                        if screen.display_output_code().matches(*source) {
                             screen_found = true;
                             break;
                         }
+                    } else {
+                        // if we do not have information about the current monitor input assume monitor is configured
+                        // to display the device
+                        screen_found = true;
+                        break;
                     }
                 }
             }
@@ -139,6 +140,20 @@ impl ScreensProfile {
             }
         }
         connected
+    }
+
+    /// calculate profile weight, this is a value that describes how good the match of a profile is if it is found to be connected
+    /// the higher the value, the higher the requirements for the profile to match, hense if it matches it should be selected of other
+    /// profiles that also match but do not have as much weight.
+    pub fn weight(&self) -> usize {
+        let mut weight = self.screens().len(); // start with the amount of screens that need to match as a baseline value
+        for screen in self.screens() {
+            // if the screen has a requirement to match agains a specific monitor input the weight needs to be increased
+            if *screen.display_output_code() != MonitorInputSourceMatcher::Any {
+                weight += 1;
+            }
+        }
+        weight
     }
 
     pub fn apply(
@@ -160,6 +175,21 @@ impl ScreensProfile {
                         )
                 {
                     monitor_map.insert(screen.identifier(), (screen, monitor_info));
+                    if let Some(mut monitor_device) = Monitor::enumerate().find(|mon| *monitor_info.name() == mon.handle.name()) {
+                        match screen.display_output_code() {
+                            MonitorInputSourceMatcher::Any => { /* nothing to do here */ },
+                            MonitorInputSourceMatcher::Input(sould_be_input) => {
+                                // if applied profile monitor config specifies a monitor input
+                                // make sure it is configured correctly!
+                                let _ = monitor_device.get_input_source().and_then(|current_input| {
+                                    if current_input != *sould_be_input {
+                                        let _ = monitor_device.set_input_source(*sould_be_input);
+                                    }
+                                    Ok(())
+                                });
+                            },
+                        }
+                    }
                 }
             }
         }

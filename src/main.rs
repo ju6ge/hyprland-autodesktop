@@ -1,11 +1,12 @@
 use clap::Parser;
 use configuration::{AppConfiguration, ScreensProfile};
 use futures::{future::BoxFuture, FutureExt};
+use itertools::Itertools;
 use libmonitor::{ddc::DdcDevice, Monitor};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     env,
     fs::File,
     io::{BufRead, BufReader, BufWriter, Read, Write},
@@ -85,8 +86,13 @@ async fn connected_monitor_listen(
             );
             // run this in its own thread te make sure the runtime does not get blocked!
             let _ = tokio::task::spawn_blocking(|| {
+                let mut current_monitor_inputs = BTreeMap::new();
+                for mut monitor in Monitor::enumerate() {
+                    if let Ok(monitor_input) = monitor.get_input_source() {
+                        current_monitor_inputs.insert(monitor.handle.name(), monitor_input);
+                    }
+                }
                 let _ = DAEMON_STATE.clone().write().and_then(|mut daemon_state| {
-                    // add ddc connections to daemon state
                     if let Some((profile_name, profile)) = daemon_state
                         .config
                         .clone()
@@ -94,12 +100,14 @@ async fn connected_monitor_listen(
                         .iter()
                         .filter_map(|(name, profile)| {
                             eprintln!("Checking if profile {} is connected", name);
-                            if profile.is_connected(&current_connected_monitors) {
+                            if profile.is_connected(&current_connected_monitors, &current_monitor_inputs) {
                                 Some((name, profile))
                             } else {
                                 None
                             }
                         })
+                        .sorted_by_key(|profile| profile.1.weight()) // rate matching profiles
+                        .rev() // profile with highest weight should be first
                         .collect::<Vec<(&String, &ScreensProfile)>>()
                         .first()
                     {
@@ -115,6 +123,7 @@ async fn connected_monitor_listen(
             })
             .await;
         } else {
+            // timeout here to avoid this read running with cpu at 100% when nothing is happening
             tokio::time::sleep(tokio::time::Duration::from_millis(TIMEOUT)).await;
         }
     }
@@ -190,7 +199,7 @@ impl Command {
             Command::MonitorInputs => {
                 let monitors = Monitor::enumerate();
                 for mut display in monitors {
-                    display.get_input_source().and_then(|input_source| {
+                    let _ = display.get_input_source().and_then(|input_source| {
                         let _ = writeln!(buffer, "{}: {:?}", display.handle.name(), input_source);
                         let _ = buffer.flush();
                         Ok(())
