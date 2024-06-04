@@ -100,7 +100,9 @@ async fn connected_monitor_listen(
                         .iter()
                         .filter_map(|(name, profile)| {
                             eprintln!("Checking if profile {} is connected", name);
-                            if profile.is_connected(&current_connected_monitors, &current_monitor_inputs) {
+                            if profile
+                                .is_connected(&current_connected_monitors, &current_monitor_inputs)
+                            {
                                 Some((name, profile))
                             } else {
                                 None

@@ -1,4 +1,5 @@
 use derive_getters::Getters;
+use hyprland::dispatch::{Dispatch, DispatchType};
 use id_tree::{Node, NodeId, Tree, TreeBuilder};
 use libmonitor::mccs::features::InputSource;
 use libmonitor::{ddc::DdcDevice, Monitor};
@@ -51,6 +52,7 @@ pub enum ScreenPositionRelative {
     LeftUnder(String),
     RightOver(String),
     RightUnder(String),
+    Mirror(String),
 }
 
 impl ScreenPositionRelative {
@@ -64,7 +66,8 @@ impl ScreenPositionRelative {
             | ScreenPositionRelative::LeftOver(identifer)
             | ScreenPositionRelative::LeftUnder(identifer)
             | ScreenPositionRelative::RightOver(identifer)
-            | ScreenPositionRelative::RightUnder(identifer) => Some(&identifer),
+            | ScreenPositionRelative::RightUnder(identifer)
+            | ScreenPositionRelative::Mirror(identifer) => Some(&identifer),
         }
     }
 
@@ -79,6 +82,7 @@ impl ScreenPositionRelative {
             ScreenPositionRelative::LeftUnder(_) => (-1 * own_size.0, parent_size.1),
             ScreenPositionRelative::RightOver(_) => (parent_size.0, -1 * own_size.1),
             ScreenPositionRelative::RightUnder(_) => (parent_size.0, parent_size.1),
+            ScreenPositionRelative::Mirror(_) => (0, 0),
         }
     }
 }
@@ -92,6 +96,8 @@ pub struct ScreenConfiguration {
     display_output_code: MonitorInputSourceMatcher,
     wallpaper: PathBuf,
     position: ScreenPositionRelative,
+    #[serde(default)]
+    workspaces: Vec<u8>,
     enabled: bool,
 }
 
@@ -104,7 +110,11 @@ pub struct ScreensProfile {
 
 impl ScreensProfile {
     /// check if a profile matches the current screens connected to the device
-    pub fn is_connected(&self, head_config: &HashMap<ObjectId, MonitorInformation>, current_monitor_inputs: &BTreeMap<String, InputSource>) -> bool {
+    pub fn is_connected(
+        &self,
+        head_config: &HashMap<ObjectId, MonitorInformation>,
+        current_monitor_inputs: &BTreeMap<String, InputSource>,
+    ) -> bool {
         let mut connected = true;
         for screen in &self.screens {
             let mut screen_found = false;
@@ -117,8 +127,7 @@ impl ScreensProfile {
                             monitor_info.serial().as_ref().unwrap_or(&"".to_string())
                         )
                 {
-                    if let Some(source) = current_monitor_inputs.get(monitor_info.name())
-                    {
+                    if let Some(source) = current_monitor_inputs.get(monitor_info.name()) {
                         // if we have information about the current monitor selected input
                         // then only consider it connected if the profiles input matches
                         // the currently active one
@@ -175,19 +184,23 @@ impl ScreensProfile {
                         )
                 {
                     monitor_map.insert(screen.identifier(), (screen, monitor_info));
-                    if let Some(mut monitor_device) = Monitor::enumerate().find(|mon| *monitor_info.name() == mon.handle.name()) {
+                    if let Some(mut monitor_device) =
+                        Monitor::enumerate().find(|mon| *monitor_info.name() == mon.handle.name())
+                    {
                         match screen.display_output_code() {
-                            MonitorInputSourceMatcher::Any => { /* nothing to do here */ },
+                            MonitorInputSourceMatcher::Any => { /* nothing to do here */ }
                             MonitorInputSourceMatcher::Input(sould_be_input) => {
                                 // if applied profile monitor config specifies a monitor input
                                 // make sure it is configured correctly!
-                                let _ = monitor_device.get_input_source().and_then(|current_input| {
-                                    if current_input != *sould_be_input {
-                                        let _ = monitor_device.set_input_source(*sould_be_input);
-                                    }
-                                    Ok(())
-                                });
-                            },
+                                let _ =
+                                    monitor_device.get_input_source().and_then(|current_input| {
+                                        if current_input != *sould_be_input {
+                                            let _ =
+                                                monitor_device.set_input_source(*sould_be_input);
+                                        }
+                                        Ok(())
+                                    });
+                            }
                         }
                     }
                 }
@@ -203,6 +216,7 @@ impl ScreensProfile {
 
         // collect settings required to configure hyprland
         struct HyprlandMonitor {
+            mirror: Option<String>,
             enabled: bool,
             name: String,
             width: i32,
@@ -212,12 +226,17 @@ impl ScreensProfile {
             pos_y: i32,
             scale: f32,
             rotation: u8,
+            workspaces: Vec<u8>,
         }
 
         let mut hyprland_monitors = Vec::new();
         for (ident, (conf, info)) in monitor_map.iter() {
             let position = calc_screen_pixel_positon(ident, &position_tree, &monitor_map);
             hyprland_monitors.push(HyprlandMonitor {
+                mirror: match conf.position() {
+                    ScreenPositionRelative::Mirror(parent) => Some(parent.to_string()),
+                    _ => None,
+                },
                 enabled: *conf.enabled(),
                 name: info.name().to_string(),
                 width: info.preffered_mode().size().0,
@@ -227,6 +246,7 @@ impl ScreensProfile {
                 pos_y: position.1,
                 scale: *conf.scale(),
                 rotation: conf.rotation().transform_id(),
+                workspaces: conf.workspaces().clone(),
             });
         }
 
@@ -244,19 +264,43 @@ impl ScreensProfile {
 
         // write hyprland configuration file
         let mut hyprland_monitor_config = File::create(hyprland_config_file).unwrap();
+        let mut moved_workspaces = Vec::new();
         for hm in hyprland_monitors {
             if hm.enabled {
-                writeln!(&mut hyprland_monitor_config,
-                        "monitor={name},{width}x{height}@{fps},{pos_x}x{pos_y},{scale},transform,{rotation}",
-                        name = hm.name,
-                        width = hm.width,
-                        height = hm.height,
-                        fps = hm.fps,
-                        pos_x = hm.pos_x,
-                        pos_y = hm.pos_y,
-                        scale = hm.scale,
-                        rotation = hm.rotation
-                ).unwrap();
+                if let Some(parent) = hm.mirror {
+                    let _ = writeln!(
+                        &mut hyprland_monitor_config,
+                        "monitor={name},preferred,auto,1,mirror,{parent}",
+                        name = hm.name
+                    );
+                } else {
+                    let _ = writeln!(&mut hyprland_monitor_config,
+                            "monitor={name},{width}x{height}@{fps},{pos_x}x{pos_y},{scale},transform,{rotation}",
+                            name = hm.name,
+                            width = hm.width,
+                            height = hm.height,
+                            fps = hm.fps,
+                            pos_x = hm.pos_x,
+                            pos_y = hm.pos_y,
+                            scale = hm.scale,
+                            rotation = hm.rotation
+                    );
+
+                    for ws in &hm.workspaces {
+                        if moved_workspaces.contains(ws) {
+                            println!(
+                                "Workspace {ws} already bound to different monitor! Ignoring …"
+                            );
+                        } else {
+                            let move_workspace = DispatchType::MoveWorkspaceToMonitor(
+                                hyprland::dispatch::WorkspaceIdentifier::Id((*ws).into()),
+                                hyprland::dispatch::MonitorIdentifier::Name(&hm.name),
+                            );
+                            let _ = Dispatch::call(move_workspace);
+                            moved_workspaces.push(*ws);
+                        }
+                    }
+                }
             } else {
                 writeln!(
                     &mut hyprland_monitor_config,

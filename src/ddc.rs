@@ -10,7 +10,7 @@ use serde_yaml::Value;
 #[derive(Debug, Clone, PartialEq)]
 pub enum MonitorInputSourceMatcher {
     Any,
-    Input(libmonitor::mccs::features::InputSource)
+    Input(libmonitor::mccs::features::InputSource),
 }
 
 impl MonitorInputSourceMatcher {
@@ -34,14 +34,12 @@ impl Serialize for MonitorInputSourceMatcher {
         S: serde::Serializer,
     {
         match self {
-            MonitorInputSourceMatcher::Any => serializer.serialize_unit_variant("MonitorInputSourceMatcher", 0, "Any"),
-            MonitorInputSourceMatcher::Input(input_source) => {
-                match input_source {
-                    InputSource::Reserved(val) => val.serialize(serializer),
-                    _ => {
-                        input_source.serialize(serializer)
-                    }
-                }
+            MonitorInputSourceMatcher::Any => {
+                serializer.serialize_unit_variant("MonitorInputSourceMatcher", 0, "Any")
+            }
+            MonitorInputSourceMatcher::Input(input_source) => match input_source {
+                InputSource::Reserved(val) => val.serialize(serializer),
+                _ => input_source.serialize(serializer),
             },
         }
     }
@@ -55,22 +53,30 @@ mod test {
     fn serialize_input_matcher() {
         let s = serde_yaml::to_string(&MonitorInputSourceMatcher::Any);
         assert!(s.is_ok_and(|val| val == "Any\n"));
-        let s = serde_yaml::to_string(&MonitorInputSourceMatcher::Input(libmonitor::mccs::features::InputSource::Analog1));
+        let s = serde_yaml::to_string(&MonitorInputSourceMatcher::Input(
+            libmonitor::mccs::features::InputSource::Analog1,
+        ));
         assert!(s.is_ok_and(|val| val == "Analog1\n"));
-        let s = serde_yaml::to_string(&MonitorInputSourceMatcher::Input(libmonitor::mccs::features::InputSource::Reserved(100)));
+        let s = serde_yaml::to_string(&MonitorInputSourceMatcher::Input(
+            libmonitor::mccs::features::InputSource::Reserved(100),
+        ));
         assert!(s.is_ok_and(|val| val == "100\n"));
     }
 
     #[test]
     fn deserialize_input_matcher() {
         let d: Result<MonitorInputSourceMatcher, serde_yaml::Error> = serde_yaml::from_str("Any");
-        assert!( d.is_ok_and(|input| input == MonitorInputSourceMatcher::Any ));
+        assert!(d.is_ok_and(|input| input == MonitorInputSourceMatcher::Any));
 
         let d: Result<MonitorInputSourceMatcher, serde_yaml::Error> = serde_yaml::from_str("Hdmi1");
-        assert!( d.is_ok_and(|input| input == MonitorInputSourceMatcher::Input(libmonitor::mccs::features::InputSource::Hdmi1) ));
+        assert!(d.is_ok_and(|input| input
+            == MonitorInputSourceMatcher::Input(libmonitor::mccs::features::InputSource::Hdmi1)));
 
         let d: Result<MonitorInputSourceMatcher, serde_yaml::Error> = serde_yaml::from_str("100");
-        assert!( d.is_ok_and(|input| input == MonitorInputSourceMatcher::Input(libmonitor::mccs::features::InputSource::Reserved(100)) ));
+        assert!(d.is_ok_and(|input| input
+            == MonitorInputSourceMatcher::Input(
+                libmonitor::mccs::features::InputSource::Reserved(100)
+            )));
     }
 }
 
@@ -108,15 +114,15 @@ impl<'de> Deserialize<'de> for MonitorInputSourceMatcher {
                 if v == "Any" {
                     Ok(MonitorInputSourceMatcher::Any)
                 } else {
-                    Ok(MonitorInputSourceMatcher::Input(InputSource::deserialize(value).map_err(|err| Error::custom(err))?))
+                    Ok(MonitorInputSourceMatcher::Input(
+                        InputSource::deserialize(value).map_err(|err| Error::custom(err))?,
+                    ))
                 }
             }
-            Value::Null => {
-                Ok(MonitorInputSourceMatcher::Any)
-            }
-            _ => {
-                Err(Error::custom("expected value of type u8 or variants: Any,<InputSourceVariant>"))
-            }
+            Value::Null => Ok(MonitorInputSourceMatcher::Any),
+            _ => Err(Error::custom(
+                "expected value of type u8 or variants: Any,<InputSourceVariant>",
+            )),
         }
     }
 }

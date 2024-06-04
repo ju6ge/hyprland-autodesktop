@@ -1,5 +1,5 @@
-Hyprland Workplaces Profiles
-============================
+Hyprland Autodesktop
+====================
 
 This tool is a re-implementation of `kanshi`` for `Hyprland`. But with some extra features. 
 
