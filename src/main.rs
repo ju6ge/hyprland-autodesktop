@@ -147,11 +147,17 @@ struct ProfileSelector {
 
 #[derive(Debug, Parser, Clone, Serialize, Deserialize)]
 enum Command {
+    /// List currently attached monitors and their names
     Attached,
+    /// List all configured profiles with their settings
     Profiles,
+    /// Print name of currently active profile
     CurrentProfile,
+    /// Display current monitor and what input their are currently set to display
     MonitorInputs,
+    /// Return the PID of the currently running daemon process
     Pid,
+    /// Switch profile to the specified one
     Apply(ProfileSelector),
 }
 
