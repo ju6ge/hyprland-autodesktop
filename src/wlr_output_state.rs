@@ -32,27 +32,27 @@ pub struct MonitorMode {
 pub struct MonitorInformation {
     #[builder(setter(into))]
     id: ObjectId,
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     name: String,
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     model: String,
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     make: String,
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     description: String,
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     size: (i32, i32),
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     position: (i32, i32),
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     enabled: i32,
     #[builder(setter(into))]
     transform: Transform,
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     scale: f64,
     #[builder(setter(into), default)]
     serial: Option<String>,
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     adaptive_sync: Option<AdaptiveSyncState>,
     #[builder(setter(into))]
     current_mode: ObjectId,
@@ -166,6 +166,7 @@ impl ScreenManagerState {
         builder.id(id);
         self.current_mode = Some(builder);
     }
+
     pub fn finish_mode(&mut self) {
         self.current_mode.take().and_then(|mb| {
             mb.build()
@@ -186,6 +187,8 @@ impl ScreenManagerState {
                 .and_then(|h| {
                     self.current_configuration.insert(h.id().clone(), h);
                     Ok(())
+                }).map_err(|err| {
+                    println!("{err:#?}")
                 })
                 .ok()
         });
@@ -236,7 +239,6 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
                 let _ = state.wlr_tx.send(state.current_configuration.clone());
             }
             zwlr_output_manager_v1::Event::Finished => {
-                //println!("=========================================================\nFinished")
             }
             _ => { /* Nothing to do here */ }
         }
