@@ -15,6 +15,8 @@ use wayland_protocols_wlr::output_management::v1::client::{
     *,
 };
 
+use crate::configuration::SwayMonitor;
+
 #[derive(Builder, Debug, Clone, Getters)]
 #[allow(dead_code)]
 pub struct MonitorMode {
@@ -142,6 +144,10 @@ impl ScreenManagerState {
             current_mode: None,
             current_configuration: HashMap::new(),
         }
+    }
+
+    pub fn apply_profile(&mut self, monitors: Vec<(ObjectId, SwayMonitor)>) -> () {
+        todo!()
     }
 }
 

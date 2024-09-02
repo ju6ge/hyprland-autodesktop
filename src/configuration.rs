@@ -101,6 +101,21 @@ pub struct ScreenConfiguration {
     enabled: bool,
 }
 
+// collect settings required to configure hyprland
+pub struct SwayMonitor {
+    pub mirror: Option<String>,
+    pub enabled: bool,
+    pub name: String,
+    pub width: i32,
+    pub height: i32,
+    pub fps: f64,
+    pub pos_x: i32,
+    pub pos_y: i32,
+    pub scale: f32,
+    pub rotation: u8,
+    pub workspaces: Vec<u8>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Getters, Clone)]
 pub struct ScreensProfile {
     screens: Vec<ScreenConfiguration>,
@@ -168,7 +183,6 @@ impl ScreensProfile {
     pub fn apply(
         &self,
         head_config: &HashMap<ObjectId, MonitorInformation>,
-        hyprland_config_file: &Path,
     ) {
         // match connected monitor information with profile monitor configuration
         let mut monitor_map: BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation)> =
@@ -214,25 +228,11 @@ impl ScreensProfile {
             add_node_to_tree(ident, &mut position_tree, &monitor_map, &mut already_added);
         }
 
-        // collect settings required to configure hyprland
-        struct HyprlandMonitor {
-            mirror: Option<String>,
-            enabled: bool,
-            name: String,
-            width: i32,
-            height: i32,
-            fps: f64,
-            pos_x: i32,
-            pos_y: i32,
-            scale: f32,
-            rotation: u8,
-            workspaces: Vec<u8>,
-        }
 
-        let mut hyprland_monitors = Vec::new();
+        let mut sway_monitors = Vec::new();
         for (ident, (conf, info)) in monitor_map.iter() {
             let position = calc_screen_pixel_positon(ident, &position_tree, &monitor_map);
-            hyprland_monitors.push(HyprlandMonitor {
+            sway_monitors.push(SwayMonitor {
                 mirror: match conf.position() {
                     ScreenPositionRelative::Mirror(parent) => Some(parent.to_string()),
                     _ => None,
@@ -251,9 +251,9 @@ impl ScreensProfile {
         }
 
         // repostion montiors so that all coordinates are postive (why hyprland?)
-        let min_pos_x = hyprland_monitors.iter().map(|hm| hm.pos_x).min().unwrap();
-        let min_pos_y = hyprland_monitors.iter().map(|hm| hm.pos_y).min().unwrap();
-        hyprland_monitors = hyprland_monitors
+        let min_pos_x = sway_monitors.iter().map(|hm| hm.pos_x).min().unwrap();
+        let min_pos_y = sway_monitors.iter().map(|hm| hm.pos_y).min().unwrap();
+        sway_monitors = sway_monitors
             .into_iter()
             .map(|mut hm| {
                 hm.pos_x -= min_pos_x;
@@ -263,28 +263,27 @@ impl ScreensProfile {
             .collect();
 
         // write hyprland configuration file
-        let mut hyprland_monitor_config = File::create(hyprland_config_file).unwrap();
         let mut moved_workspaces = Vec::new();
-        for hm in hyprland_monitors {
+        for hm in sway_monitors {
             if hm.enabled {
                 if let Some(parent) = hm.mirror {
-                    let _ = writeln!(
-                        &mut hyprland_monitor_config,
-                        "monitor={name},preferred,auto,1,mirror,{parent}",
-                        name = hm.name
-                    );
+                    //let _ = writeln!(
+                        //&mut sway_monitor_config,
+                        //"monitor={name},preferred,auto,1,mirror,{parent}",
+                        //name = hm.name
+                    //);
                 } else {
-                    let _ = writeln!(&mut hyprland_monitor_config,
-                            "monitor={name},{width}x{height}@{fps},{pos_x}x{pos_y},{scale},transform,{rotation}",
-                            name = hm.name,
-                            width = hm.width,
-                            height = hm.height,
-                            fps = hm.fps,
-                            pos_x = hm.pos_x,
-                            pos_y = hm.pos_y,
-                            scale = hm.scale,
-                            rotation = hm.rotation
-                    );
+                    //let _ = writeln!(&mut sway_monitor_config,
+                            //"monitor={name},{width}x{height}@{fps},{pos_x}x{pos_y},{scale},transform,{rotation}",
+                            //name = hm.name,
+                            //width = hm.width,
+                            //height = hm.height,
+                            //fps = hm.fps,
+                            //pos_x = hm.pos_x,
+                            //pos_y = hm.pos_y,
+                            //scale = hm.scale,
+                            //rotation = hm.rotation
+                    //);
 
                     for ws in &hm.workspaces {
                         if moved_workspaces.contains(ws) {
@@ -292,22 +291,23 @@ impl ScreensProfile {
                                 "Workspace {ws} already bound to different monitor! Ignoring …"
                             );
                         } else {
-                            let move_workspace = DispatchType::MoveWorkspaceToMonitor(
-                                hyprland::dispatch::WorkspaceIdentifier::Id((*ws).into()),
-                                hyprland::dispatch::MonitorIdentifier::Name(&hm.name),
-                            );
-                            let _ = Dispatch::call(move_workspace);
+                            //TODO sway dispatch to move workspace
+                            //let move_workspace = DispatchType::MoveWorkspaceToMonitor(
+                                //hyprland::dispatch::WorkspaceIdentifier::Id((*ws).into()),
+                                //hyprland::dispatch::MonitorIdentifier::Name(&hm.name),
+                            //);
+                            //let _ = Dispatch::call(move_workspace);
                             moved_workspaces.push(*ws);
                         }
                     }
                 }
             } else {
-                writeln!(
-                    &mut hyprland_monitor_config,
-                    "monitor={name},disabled",
-                    name = hm.name
-                )
-                .unwrap();
+                //writeln!(
+                    //&mut sway_monitor_config,
+                    //"monitor={name},disabled",
+                    //name = hm.name
+                //)
+                //.unwrap();
             }
         }
 

@@ -113,9 +113,7 @@ async fn connected_monitor_listen(
                         .collect::<Vec<(&String, &ScreensProfile)>>()
                         .first()
                     {
-                        let hyprland_config_file =
-                            daemon_state.config.hyprland_config_file().clone();
-                        profile.apply(&current_connected_monitors, &hyprland_config_file);
+                        profile.apply(&current_connected_monitors);
                         daemon_state.current_profile = Some(profile_name.to_string());
                     }
                     eprintln!("apply configuration!");
@@ -227,9 +225,7 @@ impl Command {
                     {
                         Some(profile) => {
                             let head_config = daemon_state.head_state.clone();
-                            let hyprland_config_file =
-                                daemon_state.config.hyprland_config_file().clone();
-                            profile.apply(&head_config, &hyprland_config_file);
+                            profile.apply(&head_config);
                             daemon_state.current_profile = Some(profile_selector.name.clone());
                         }
                         None => {
