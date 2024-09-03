@@ -185,10 +185,10 @@ impl ScreensProfile {
         head_config: &HashMap<ObjectId, MonitorInformation>,
     ) {
         // match connected monitor information with profile monitor configuration
-        let mut monitor_map: BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation)> =
+        let mut monitor_map: BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation, &ObjectId)> =
             BTreeMap::new();
         for screen in &self.screens {
-            for (_id, monitor_info) in head_config.iter() {
+            for (id, monitor_info) in head_config.iter() {
                 if screen.identifier() == monitor_info.name()
                     || screen.identifier()
                         == &format!(
@@ -197,7 +197,7 @@ impl ScreensProfile {
                             monitor_info.serial().as_ref().unwrap_or(&"".to_string())
                         )
                 {
-                    monitor_map.insert(screen.identifier(), (screen, monitor_info));
+                    monitor_map.insert(screen.identifier(), (screen, monitor_info, id));
                     if let Some(mut monitor_device) =
                         Monitor::enumerate().find(|mon| *monitor_info.name() == mon.handle.name())
                     {
@@ -224,13 +224,13 @@ impl ScreensProfile {
         // build tree of attached displays
         let mut position_tree = TreeBuilder::new().with_root(Node::new("Root")).build();
         let mut already_added: Vec<&str> = Vec::new();
-        for (ident, (_conf, _info)) in monitor_map.iter() {
+        for (ident, (_conf, _info, _id)) in monitor_map.iter() {
             add_node_to_tree(ident, &mut position_tree, &monitor_map, &mut already_added);
         }
 
 
         let mut sway_monitors = Vec::new();
-        for (ident, (conf, info)) in monitor_map.iter() {
+        for (ident, (conf, info, _id)) in monitor_map.iter() {
             let position = calc_screen_pixel_positon(ident, &position_tree, &monitor_map);
             sway_monitors.push(SwayMonitor {
                 mirror: match conf.position() {
@@ -322,7 +322,7 @@ impl ScreensProfile {
 fn calc_screen_pixel_positon(
     ident: &str,
     position_tree: &Tree<&str>,
-    monitor_map: &BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation)>,
+    monitor_map: &BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation, &ObjectId)>,
 ) -> (i32, i32) {
     let root_node_id = position_tree.root_node_id().unwrap();
     let current_node_id = find_nodeid_from_ident(ident, position_tree).unwrap();
@@ -339,8 +339,8 @@ fn calc_screen_pixel_positon(
                     .data();
                 let parent_position =
                     calc_screen_pixel_positon(&parent_ident, position_tree, monitor_map);
-                let (conf, info) = monitor_map.get(ident).unwrap();
-                let (parent_conf, parent_info) = monitor_map.get(parent_ident).unwrap();
+                let (conf, info, _id) = monitor_map.get(ident).unwrap();
+                let (parent_conf, parent_info, _id) = monitor_map.get(parent_ident).unwrap();
                 let parent_size = if parent_conf.enabled {
                     parent_conf
                         .rotation()
@@ -376,12 +376,12 @@ fn find_nodeid_from_ident(ident: &str, position_tree: &Tree<&str>) -> Option<Nod
 fn add_node_to_tree<'a>(
     ident: &'a str,
     position_tree: &mut Tree<&'a str>,
-    monitor_map: &BTreeMap<&'a str, (&'a ScreenConfiguration, &'a MonitorInformation)>,
+    monitor_map: &BTreeMap<&'a str, (&'a ScreenConfiguration, &'a MonitorInformation, &'a ObjectId)>,
     already_added: &mut Vec<&'a str>,
 ) -> Option<NodeId> {
     // if monitor was already added do not add it again!
     if !already_added.contains(&ident) {
-        monitor_map.get(&ident).and_then(|(conf, _info)| {
+        monitor_map.get(&ident).and_then(|(conf, _info, _id)| {
             let parent_ident = conf.position().parent();
             match parent_ident {
                 Some(parent) => {
