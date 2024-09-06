@@ -2,18 +2,21 @@ use std::collections::HashMap;
 
 use derive_builder::Builder;
 use derive_getters::Getters;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use wayland_client::{
     backend::ObjectId,
     event_created_child,
     protocol::{wl_display::WlDisplay, wl_output::Transform, wl_registry},
     Connection, Dispatch, Proxy, QueueHandle,
 };
-use wayland_protocols_wlr::output_management::{self, v1::client::{
-    zwlr_output_head_v1::{AdaptiveSyncState, ZwlrOutputHeadV1},
-    zwlr_output_mode_v1::ZwlrOutputModeV1,
-    *,
-}};
+use wayland_protocols_wlr::output_management::{
+    self,
+    v1::client::{
+        zwlr_output_head_v1::{AdaptiveSyncState, ZwlrOutputHeadV1},
+        zwlr_output_mode_v1::ZwlrOutputModeV1,
+        *,
+    },
+};
 
 use crate::configuration::SwayMonitor;
 
@@ -146,14 +149,28 @@ impl ScreenManagerState {
         }
     }
 
-    pub fn apply_profile(&mut self, monitors: Vec<(ObjectId, SwayMonitor)>, qh: &QueueHandle<Self>) -> () {
+    pub fn update_head_configuration(
+        &mut self,
+        monitors: Vec<(ObjectId, SwayMonitor)>,
+        qh: &QueueHandle<Self>,
+    ) -> () {
+        println!("{monitors:#?}");
+        println!("{:#?}", self.current_configuration);
         if let Some(ref mut output_management) = self.output_manager {
             for (id, desired_config) in monitors {
                 if let Some(matching_head) = self.current_configuration.get(&id) {
                     if desired_config.enabled {
-                        let config = output_management.create_configuration(0, qh, ()).enable_head(&matching_head.head, qh, ());
+                        //TODO check the id here?
+                        let config = output_management
+                            .create_configuration(0, qh, ())
+                            .enable_head(&matching_head.head, qh, ());
+                        config.set_position(desired_config.pos_x, desired_config.pos_y);
+                        config.set_scale(desired_config.scale);
+                        config.set_transform(desired_config.rotation.into());
                     } else {
-                        output_management.create_configuration(0, qh, ()).disable_head(&matching_head.head);
+                        output_management
+                            .create_configuration(0, qh, ())
+                            .disable_head(&matching_head.head);
                     }
                 }
             }
@@ -203,9 +220,8 @@ impl ScreenManagerState {
                 .and_then(|h| {
                     self.current_configuration.insert(h.head().id(), h);
                     Ok(())
-                }).map_err(|err| {
-                    println!("{err:#?}")
                 })
+                .map_err(|err| println!("{err:#?}"))
                 .ok()
         });
     }
@@ -254,8 +270,7 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
 
                 let _ = state.wlr_tx.send(state.current_configuration.clone());
             }
-            zwlr_output_manager_v1::Event::Finished => {
-            }
+            zwlr_output_manager_v1::Event::Finished => {}
             _ => { /* Nothing to do here */ }
         }
     }
@@ -364,7 +379,9 @@ impl Dispatch<zwlr_output_head_v1::ZwlrOutputHeadV1, ()> for ScreenManagerState 
     ]);
 }
 
-impl Dispatch<zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1, ()> for ScreenManagerState {
+impl Dispatch<zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1, ()>
+    for ScreenManagerState
+{
     fn event(
         _state: &mut Self,
         _proxy: &zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1,
@@ -375,11 +392,10 @@ impl Dispatch<zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1, 
     ) {
         match event {
             //TODO figure out if this is useful for anything?
-            _ => { /* nothing to see here */ },
+            _ => { /* nothing to see here */ }
         }
     }
 }
-
 
 impl Dispatch<zwlr_output_configuration_v1::ZwlrOutputConfigurationV1, ()> for ScreenManagerState {
     fn event(
@@ -392,10 +408,12 @@ impl Dispatch<zwlr_output_configuration_v1::ZwlrOutputConfigurationV1, ()> for S
     ) {
         // TODO should i do something with these events?
         match event {
-            zwlr_output_configuration_v1::Event::Succeeded => { /*nothing done here yet*/ },
-            zwlr_output_configuration_v1::Event::Failed => { /*nothing done here yet*/ },
-            zwlr_output_configuration_v1::Event::Cancelled => { /*nothing done here yet*/ },
-            _ => unimplemented!("propbaly an unknown future event has occured and needs a handler!"),
+            zwlr_output_configuration_v1::Event::Succeeded => { /*nothing done here yet*/ }
+            zwlr_output_configuration_v1::Event::Failed => { /*nothing done here yet*/ }
+            zwlr_output_configuration_v1::Event::Cancelled => { /*nothing done here yet*/ }
+            _ => {
+                unimplemented!("propbaly an unknown future event has occured and needs a handler!")
+            }
         }
     }
 }
@@ -433,7 +451,10 @@ impl Dispatch<zwlr_output_mode_v1::ZwlrOutputModeV1, ()> for ScreenManagerState 
     }
 }
 
-pub fn wayland_event_loop(wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInformation>>) {
+pub fn wayland_event_loop(
+    wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInformation>>,
+    mut config_head_rx: UnboundedReceiver<Vec<(ObjectId, SwayMonitor)>>,
+) {
     let conn = Connection::connect_to_env().expect("Error connection to wayland session! Are you sure you are using a wayland based window manager?");
 
     let display = conn.display();
@@ -447,5 +468,8 @@ pub fn wayland_event_loop(wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInfor
 
     while state.running {
         let _ = wl_events.blocking_dispatch(&mut state);
+        if let Ok(update_head_event) = config_head_rx.try_recv() {
+            state.update_head_configuration(update_head_event, &qh);
+        }
     }
 }

@@ -1,17 +1,17 @@
 use derive_getters::Getters;
-use hyprland::dispatch::{Dispatch, DispatchType};
 use id_tree::{Node, NodeId, Tree, TreeBuilder};
+use itertools::Itertools;
 use libmonitor::mccs::features::InputSource;
 use libmonitor::{ddc::DdcDevice, Monitor};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
 use std::{
     collections::{BTreeMap, HashMap},
-    fs::File,
     path::{Path, PathBuf},
     process::Command,
 };
+use tokio::sync::mpsc::UnboundedSender;
 use wayland_client::backend::ObjectId;
+use wayland_client::protocol::wl_output::Transform;
 
 use crate::{ddc::MonitorInputSourceMatcher, wlr_output_state::MonitorInformation};
 
@@ -21,6 +21,17 @@ pub enum ScreenRotation {
     LandscapeReversed,
     Portrait,
     PortraitReversed,
+}
+
+impl Into<Transform> for ScreenRotation {
+    fn into(self) -> Transform {
+        match self {
+            ScreenRotation::Landscape => Transform::Normal,
+            ScreenRotation::LandscapeReversed => Transform::_180,
+            ScreenRotation::Portrait => Transform::_90,
+            ScreenRotation::PortraitReversed => Transform::_270,
+        }
+    }
 }
 
 impl ScreenRotation {
@@ -90,7 +101,7 @@ impl ScreenPositionRelative {
 #[derive(Serialize, Deserialize, Debug, Getters, Clone)]
 pub struct ScreenConfiguration {
     identifier: String,
-    scale: f32,
+    scale: f64,
     rotation: ScreenRotation,
     #[serde(default)]
     display_output_code: MonitorInputSourceMatcher,
@@ -101,6 +112,7 @@ pub struct ScreenConfiguration {
     enabled: bool,
 }
 
+#[derive(Debug)]
 // collect settings required to configure hyprland
 pub struct SwayMonitor {
     pub mirror: Option<String>,
@@ -111,8 +123,8 @@ pub struct SwayMonitor {
     pub fps: f64,
     pub pos_x: i32,
     pub pos_y: i32,
-    pub scale: f32,
-    pub rotation: u8,
+    pub scale: f64,
+    pub rotation: ScreenRotation,
     pub workspaces: Vec<u8>,
 }
 
@@ -183,10 +195,13 @@ impl ScreensProfile {
     pub fn apply(
         &self,
         head_config: &HashMap<ObjectId, MonitorInformation>,
+        update_head_channel: &mut UnboundedSender<Vec<(ObjectId, SwayMonitor)>>,
     ) {
         // match connected monitor information with profile monitor configuration
-        let mut monitor_map: BTreeMap<&str, (&ScreenConfiguration, &MonitorInformation, &ObjectId)> =
-            BTreeMap::new();
+        let mut monitor_map: BTreeMap<
+            &str,
+            (&ScreenConfiguration, &MonitorInformation, &ObjectId),
+        > = BTreeMap::new();
         for screen in &self.screens {
             for (id, monitor_info) in head_config.iter() {
                 if screen.identifier() == monitor_info.name()
@@ -228,88 +243,76 @@ impl ScreensProfile {
             add_node_to_tree(ident, &mut position_tree, &monitor_map, &mut already_added);
         }
 
-
         let mut sway_monitors = Vec::new();
         for (ident, (conf, info, _id)) in monitor_map.iter() {
             let position = calc_screen_pixel_positon(ident, &position_tree, &monitor_map);
-            sway_monitors.push(SwayMonitor {
-                mirror: match conf.position() {
-                    ScreenPositionRelative::Mirror(parent) => Some(parent.to_string()),
-                    _ => None,
+            sway_monitors.push((
+                (*_id).clone(),
+                SwayMonitor {
+                    mirror: match conf.position() {
+                        ScreenPositionRelative::Mirror(parent) => Some(parent.to_string()),
+                        _ => None,
+                    },
+                    enabled: *conf.enabled(),
+                    name: info.name().to_string(),
+                    width: info.preffered_mode().size().0,
+                    height: info.preffered_mode().size().1,
+                    fps: info.preffered_mode().refresh() / 1000.,
+                    pos_x: position.0,
+                    pos_y: position.1,
+                    scale: *conf.scale(),
+                    rotation: conf.rotation().clone(),
+                    workspaces: conf.workspaces().clone(),
                 },
-                enabled: *conf.enabled(),
-                name: info.name().to_string(),
-                width: info.preffered_mode().size().0,
-                height: info.preffered_mode().size().1,
-                fps: info.preffered_mode().refresh() / 1000.,
-                pos_x: position.0,
-                pos_y: position.1,
-                scale: *conf.scale(),
-                rotation: conf.rotation().transform_id(),
-                workspaces: conf.workspaces().clone(),
-            });
+            ));
         }
 
         // repostion montiors so that all coordinates are postive (why hyprland?)
-        let min_pos_x = sway_monitors.iter().map(|hm| hm.pos_x).min().unwrap();
-        let min_pos_y = sway_monitors.iter().map(|hm| hm.pos_y).min().unwrap();
+        let min_pos_x = sway_monitors.iter().map(|(_, hm)| hm.pos_x).min().unwrap();
+        let min_pos_y = sway_monitors.iter().map(|(_, hm)| hm.pos_y).min().unwrap();
         sway_monitors = sway_monitors
             .into_iter()
-            .map(|mut hm| {
+            .map(|(id, mut hm)| {
                 hm.pos_x -= min_pos_x;
                 hm.pos_y -= min_pos_y;
-                hm
+                (id, hm)
             })
             .collect();
 
         // write hyprland configuration file
         let mut moved_workspaces = Vec::new();
-        for hm in sway_monitors {
-            if hm.enabled {
-                if let Some(parent) = hm.mirror {
-                    //let _ = writeln!(
-                        //&mut sway_monitor_config,
-                        //"monitor={name},preferred,auto,1,mirror,{parent}",
-                        //name = hm.name
-                    //);
-                } else {
-                    //let _ = writeln!(&mut sway_monitor_config,
-                            //"monitor={name},{width}x{height}@{fps},{pos_x}x{pos_y},{scale},transform,{rotation}",
-                            //name = hm.name,
-                            //width = hm.width,
-                            //height = hm.height,
-                            //fps = hm.fps,
-                            //pos_x = hm.pos_x,
-                            //pos_y = hm.pos_y,
-                            //scale = hm.scale,
-                            //rotation = hm.rotation
-                    //);
-
+        swayipc::Connection::new().and_then(|mut sway_ipc| {
+            for (_, hm) in &sway_monitors {
+                if hm.enabled {
                     for ws in &hm.workspaces {
                         if moved_workspaces.contains(ws) {
                             println!(
                                 "Workspace {ws} already bound to different monitor! Ignoring …"
                             );
                         } else {
-                            //TODO sway dispatch to move workspace
-                            //let move_workspace = DispatchType::MoveWorkspaceToMonitor(
-                                //hyprland::dispatch::WorkspaceIdentifier::Id((*ws).into()),
-                                //hyprland::dispatch::MonitorIdentifier::Name(&hm.name),
-                            //);
-                            //let _ = Dispatch::call(move_workspace);
-                            moved_workspaces.push(*ws);
+                            //TODO check if sway dispatch works as expected
+                            if let Some(sway_ws) = sway_ipc
+                                .get_workspaces()
+                                .expect("sway is expected to run and have workspaces")
+                                .iter()
+                                .find_or_first(|sway_ws| sway_ws.num == *ws as i32)
+                            {
+                                let move_workspace_cmd = swayipc_command_builder::Command::new()
+                                    .workspace()
+                                    .name(sway_ws.name.clone())
+                                    .output(format!("output {}", &hm.name));
+                                println!("{move_workspace_cmd}");
+                                let _ = sway_ipc.run_command(move_workspace_cmd);
+                                moved_workspaces.push(*ws);
+                            }
                         }
                     }
                 }
-            } else {
-                //writeln!(
-                    //&mut sway_monitor_config,
-                    //"monitor={name},disabled",
-                    //name = hm.name
-                //)
-                //.unwrap();
             }
-        }
+            Ok(())
+        });
+
+        let _ = update_head_channel.send(sway_monitors);
 
         // run commands that where defined
         for cmd in &self.skripts {
@@ -376,7 +379,14 @@ fn find_nodeid_from_ident(ident: &str, position_tree: &Tree<&str>) -> Option<Nod
 fn add_node_to_tree<'a>(
     ident: &'a str,
     position_tree: &mut Tree<&'a str>,
-    monitor_map: &BTreeMap<&'a str, (&'a ScreenConfiguration, &'a MonitorInformation, &'a ObjectId)>,
+    monitor_map: &BTreeMap<
+        &'a str,
+        (
+            &'a ScreenConfiguration,
+            &'a MonitorInformation,
+            &'a ObjectId,
+        ),
+    >,
     already_added: &mut Vec<&'a str>,
 ) -> Option<NodeId> {
     // if monitor was already added do not add it again!

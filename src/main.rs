@@ -1,5 +1,5 @@
 use clap::Parser;
-use configuration::{AppConfiguration, ScreensProfile};
+use configuration::{AppConfiguration, ScreensProfile, SwayMonitor};
 use futures::{future::BoxFuture, FutureExt};
 use itertools::Itertools;
 use libmonitor::{ddc::DdcDevice, Monitor};
@@ -15,7 +15,7 @@ use std::{
     process,
     sync::{Arc, RwLock},
 };
-use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use wayland_client::backend::ObjectId;
 use wlr_output_state::MonitorInformation;
 
@@ -77,6 +77,7 @@ fn get_newest_message<'a>(
 
 async fn connected_monitor_listen(
     mut wlr_rx: UnboundedReceiver<HashMap<ObjectId, MonitorInformation>>,
+    config_head_tx: UnboundedSender<Vec<(ObjectId, SwayMonitor)>>,
 ) {
     loop {
         if let Some(current_connected_monitors) = get_newest_message(&mut wlr_rx).await.ok() {
@@ -84,8 +85,9 @@ async fn connected_monitor_listen(
                 "{:#?}",
                 current_connected_monitors.keys().collect::<Vec<_>>()
             );
+            let mut config_update_tx = config_head_tx.clone();
             // run this in its own thread te make sure the runtime does not get blocked!
-            let _ = tokio::task::spawn_blocking(|| {
+            let _ = tokio::task::spawn_blocking(move || {
                 let mut current_monitor_inputs = BTreeMap::new();
                 for mut monitor in Monitor::enumerate() {
                     if let Ok(monitor_input) = monitor.get_input_source() {
@@ -113,7 +115,7 @@ async fn connected_monitor_listen(
                         .collect::<Vec<(&String, &ScreensProfile)>>()
                         .first()
                     {
-                        profile.apply(&current_connected_monitors);
+                        profile.apply(&current_connected_monitors, &mut config_update_tx);
                         daemon_state.current_profile = Some(profile_name.to_string());
                     }
                     eprintln!("apply configuration!");
@@ -160,7 +162,11 @@ enum Command {
 }
 
 impl Command {
-    pub fn run(&self, buffer: &mut BufWriter<UnixStream>) {
+    pub fn run(
+        &self,
+        buffer: &mut BufWriter<UnixStream>,
+        config_head_tx: &mut UnboundedSender<Vec<(ObjectId, SwayMonitor)>>,
+    ) {
         match self {
             Command::Attached => {
                 let _ = DAEMON_STATE.read().and_then(|daemon_state| {
@@ -225,7 +231,7 @@ impl Command {
                     {
                         Some(profile) => {
                             let head_config = daemon_state.head_state.clone();
-                            profile.apply(&head_config);
+                            profile.apply(&head_config, config_head_tx);
                             daemon_state.current_profile = Some(profile_selector.name.clone());
                         }
                         None => {
@@ -240,7 +246,7 @@ impl Command {
     }
 }
 
-fn command_listener() {
+fn command_listener(mut head_config_tx: UnboundedSender<Vec<(ObjectId, SwayMonitor)>>) {
     let _ = UnixListener::bind(SOCKET_ADDR.as_str()).and_then(|socket_server| {
         for connection in socket_server.incoming() {
             let _ = connection.and_then(|mut stream| {
@@ -250,7 +256,7 @@ fn command_listener() {
                 match recv_command {
                     Ok(command) => {
                         let mut buffer = BufWriter::new(stream);
-                        command.run(&mut buffer);
+                        command.run(&mut buffer, &mut head_config_tx);
                     }
                     Err(err) => {
                         let mut buffer = BufWriter::new(stream);
@@ -346,13 +352,20 @@ async fn main() {
 
             let (wlr_tx, wlr_rx) =
                 mpsc::unbounded_channel::<HashMap<ObjectId, MonitorInformation>>();
+
+            let (head_config_tx, head_config_rx) =
+                mpsc::unbounded_channel::<Vec<(ObjectId, SwayMonitor)>>();
+
+            let head_config_command_tx = head_config_tx.clone();
+
             let wlr_output_updates_blocking = tokio::task::spawn_blocking(|| {
-                wlr_output_state::wayland_event_loop(wlr_tx);
+                wlr_output_state::wayland_event_loop(wlr_tx, head_config_rx);
             });
             let commmand_listener_task = tokio::task::spawn_blocking(|| {
-                command_listener();
+                command_listener(head_config_command_tx);
             });
-            let connected_monitors_handler = tokio::task::spawn(connected_monitor_listen(wlr_rx));
+            let connected_monitors_handler =
+                tokio::task::spawn(connected_monitor_listen(wlr_rx, head_config_tx));
             let _ = tokio::join!(
                 wlr_output_updates_blocking,
                 connected_monitors_handler,
