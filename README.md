@@ -1,9 +1,9 @@
-Hyprland Autodesktop
+Sway Autodesktop
 ====================
 
-This tool is a re-implementation of `kanshi`` for `Hyprland`. But with some extra features. 
+This tool is a re-implementation of `kanshi`` for `Sway`. But with some extra features. 
 
-This program needs to run as a daemon to listen to wayland wlr protocol event to detect when monitors are attached or detached from the device. This information is used to apply a configuration profile ordering displays in a specific way. External skripts can be used to apply a specific network profile or power-profile. It will also detect which physical input a monitor is currently using (via ddc) making profile selection more powerful.
+This program needs to run as a daemon to listen to wayland wlr protocol event to detect when monitors are attached or detached from the device. This information is used to apply a configuration profile ordering displays in a specific way. External scripts can be used to apply a specific network profile or power-profile. It will also detect which physical input a monitor is currently using (via ddc) making profile selection more powerful.
 
 Running the program with a command will communicate with the daemon process to get state information or force a specific profile.
 
@@ -24,7 +24,7 @@ profiles:                                                       # named profiles
       wallpaper: /tmp/test.png
       position: Root
       enabled: true
-    skripts:
+    scripts:
     - sudo systemctl start iwd                                  # enable wife (sudo scripts need to be explicitly whitelisted in visudo to work here)
     - /usr/bin/powerprofilesctl set power-saver                 # set device powerprofile
   docked_only_laptop:                                           # profile for docked mode but monitor input not set to dockingstation (maybe there is a worksation)
@@ -42,7 +42,7 @@ profiles:                                                       # named profiles
       wallpaper: /tmp/test.png
       position: Root
       enabled: true
-    skripts:
+    scripts:
     - sudo systemctl start iwd                                  # disable wifi
     - /usr/bin/powerprofilesctl set power-saver                 # set device powerprofile
   docked_with_laptop:                                           # profile for docked with monitor as second screen enabled
@@ -60,7 +60,7 @@ profiles:                                                       # named profiles
       wallpaper: /tmp/test.png
       position: !LeftUnder Dell XXXXXXA
       enabled: true
-    skripts:
+    scripts:
     - sudo systemctl stop iwd                                   # disable wifi
     - /usr/bin/powerprofilesctl set performance                 # set device powerprofile
 ```

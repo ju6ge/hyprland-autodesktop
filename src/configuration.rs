@@ -132,7 +132,7 @@ pub struct SwayMonitor {
 pub struct ScreensProfile {
     screens: Vec<ScreenConfiguration>,
     #[serde(default)]
-    skripts: Vec<String>,
+    scripts: Vec<String>,
 }
 
 impl ScreensProfile {
@@ -335,7 +335,7 @@ impl ScreensProfile {
         let _ = update_head_channel.send(sway_monitors);
 
         // run commands that where defined
-        for cmd in &self.skripts {
+        for cmd in &self.scripts {
             let args = cmd.split(' ').collect::<Vec<&str>>();
             let _out = Command::new(args[0]).args(&args[1..]).output().unwrap();
         }
