@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::mpsc::Sender;
 use std::{
     collections::{BTreeMap, HashMap},
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::Command,
 };
 use wayland_client::backend::ObjectId;
@@ -466,14 +466,12 @@ fn add_node_to_tree<'a>(
 
 #[derive(Serialize, Deserialize, Debug, Getters, Clone)]
 pub struct AppConfiguration {
-    hyprland_config_file: PathBuf,
     profiles: BTreeMap<String, ScreensProfile>,
 }
 
 impl Default for AppConfiguration {
     fn default() -> Self {
         Self {
-            hyprland_config_file: Path::new("~/.config/hypr/display.conf").into(),
             profiles: BTreeMap::new(),
         }
     }
