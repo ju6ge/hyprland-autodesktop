@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, thread::sleep};
 
 use derive_builder::Builder;
 use derive_getters::Getters;
@@ -128,6 +128,7 @@ struct ScreenManagerState {
     update_serial: u32,
     output_manager: Option<zwlr_output_manager_v1::ZwlrOutputManagerV1>,
     wlr_tx: Sender<HashMap<ObjectId, MonitorInformation>>,
+    config_dirty: bool,
     current_head: Option<MonitorInformationBuilder>,
     current_mode: Option<MonitorModeBuilder>,
     current_configuration: HashMap<ObjectId, MonitorInformation>,
@@ -141,6 +142,7 @@ impl ScreenManagerState {
             output_manager: None,
             update_serial: 0,
             wlr_tx,
+            config_dirty: false,
             current_head: None,
             current_mode: None,
             current_configuration: HashMap::new(),
@@ -182,7 +184,11 @@ impl ScreenManagerState {
         }
         let mut builder = match self.current_configuration.get(&head.id()) {
             Some(mi) => MonitorInformationBuilder::from_value(mi),
-            None => MonitorInformationBuilder::default(),
+            None => {
+                // always set dirty if a completly new head (display) is created
+                self.config_dirty = true;
+                MonitorInformationBuilder::default()
+            },
         };
         builder.head(head);
         self.current_head = Some(builder);
@@ -266,7 +272,11 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
                 state.update_serial = serial;
                 state.finish_head();
 
-                let _ = state.wlr_tx.send(state.current_configuration.clone());
+                // only send configuration if changes where detected
+                if state.config_dirty {
+                    state.config_dirty = false;
+                    let _ = state.wlr_tx.send(state.current_configuration.clone());
+                }
             }
             zwlr_output_manager_v1::Event::Finished => {}
             _ => { /* Nothing to do here */ }
@@ -465,10 +475,16 @@ pub fn wayland_event_loop(
     let mut state = ScreenManagerState::new(display, wlr_tx);
 
     while state.running {
-        let _ = wl_events.roundtrip(&mut state);
-        //let _ = wl_events.blocking_dispatch(&mut state);
+        let x = wl_events.roundtrip(&mut state);
+
+        let mut update_event_happend = false;
         if let Ok(update_head_event) = config_head_rx.try_recv() {
+            update_event_happend = true;
             state.update_head_configuration(update_head_event, &qh);
+        }
+        // if nothing happend in this loop iteration sleep for a while to save power
+        if !update_event_happend && x.is_ok_and(|num_events| num_events == 0) {
+            sleep(std::time::Duration::from_millis(100));
         }
     }
 }
