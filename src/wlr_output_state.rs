@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use derive_builder::Builder;
 use derive_getters::Getters;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use std::sync::mpsc::{Receiver, Sender};
 use wayland_client::{
     backend::ObjectId,
     event_created_child,
@@ -126,22 +126,21 @@ impl MonitorInformationBuilder {
 struct ScreenManagerState {
     running: bool,
     _display: WlDisplay,
+    update_serial: u32,
     output_manager: Option<zwlr_output_manager_v1::ZwlrOutputManagerV1>,
-    wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInformation>>,
+    wlr_tx: Sender<HashMap<ObjectId, MonitorInformation>>,
     current_head: Option<MonitorInformationBuilder>,
     current_mode: Option<MonitorModeBuilder>,
     current_configuration: HashMap<ObjectId, MonitorInformation>,
 }
 
 impl ScreenManagerState {
-    pub fn new(
-        display: WlDisplay,
-        wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInformation>>,
-    ) -> Self {
+    pub fn new(display: WlDisplay, wlr_tx: Sender<HashMap<ObjectId, MonitorInformation>>) -> Self {
         Self {
             running: true,
             _display: display,
             output_manager: None,
+            update_serial: 0,
             wlr_tx,
             current_head: None,
             current_mode: None,
@@ -154,26 +153,25 @@ impl ScreenManagerState {
         monitors: Vec<(ObjectId, SwayMonitor)>,
         qh: &QueueHandle<Self>,
     ) -> () {
-        println!("{monitors:#?}");
-        println!("{:#?}", self.current_configuration);
         if let Some(ref mut output_management) = self.output_manager {
+            let output_configuration =
+                output_management.create_configuration(self.update_serial, qh, ());
             for (id, desired_config) in monitors {
                 if let Some(matching_head) = self.current_configuration.get(&id) {
+                    println!("updating monitor: {desired_config:#?}");
                     if desired_config.enabled {
-                        //TODO check the id here?
-                        let config = output_management
-                            .create_configuration(0, qh, ())
-                            .enable_head(&matching_head.head, qh, ());
+                        let config = output_configuration.enable_head(&matching_head.head, qh, ());
                         config.set_position(desired_config.pos_x, desired_config.pos_y);
                         config.set_scale(desired_config.scale);
                         config.set_transform(desired_config.rotation.into());
                     } else {
                         output_management
-                            .create_configuration(0, qh, ())
+                            .create_configuration(self.update_serial, qh, ())
                             .disable_head(&matching_head.head);
                     }
                 }
             }
+            output_configuration.apply();
         }
     }
 }
@@ -265,7 +263,8 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
             zwlr_output_manager_v1::Event::Head { head } => {
                 state.create_new_head(head);
             }
-            zwlr_output_manager_v1::Event::Done { serial: _ } => {
+            zwlr_output_manager_v1::Event::Done { serial } => {
+                state.update_serial = serial;
                 state.finish_head();
 
                 let _ = state.wlr_tx.send(state.current_configuration.clone());
@@ -444,7 +443,7 @@ impl Dispatch<zwlr_output_mode_v1::ZwlrOutputModeV1, ()> for ScreenManagerState 
                 }
             }
             zwlr_output_mode_v1::Event::Finished => {
-                //println!("============================================\nFinished");
+                app_state.finish_mode();
             }
             _ => { /* Nothing to do here */ }
         }
@@ -452,8 +451,8 @@ impl Dispatch<zwlr_output_mode_v1::ZwlrOutputModeV1, ()> for ScreenManagerState 
 }
 
 pub fn wayland_event_loop(
-    wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInformation>>,
-    mut config_head_rx: UnboundedReceiver<Vec<(ObjectId, SwayMonitor)>>,
+    wlr_tx: Sender<HashMap<ObjectId, MonitorInformation>>,
+    config_head_rx: Receiver<Vec<(ObjectId, SwayMonitor)>>,
 ) {
     let conn = Connection::connect_to_env().expect("Error connection to wayland session! Are you sure you are using a wayland based window manager?");
 
@@ -467,7 +466,8 @@ pub fn wayland_event_loop(
     let mut state = ScreenManagerState::new(display, wlr_tx);
 
     while state.running {
-        let _ = wl_events.blocking_dispatch(&mut state);
+        let _ = wl_events.roundtrip(&mut state);
+        //let _ = wl_events.blocking_dispatch(&mut state);
         if let Ok(update_head_event) = config_head_rx.try_recv() {
             state.update_head_configuration(update_head_event, &qh);
         }

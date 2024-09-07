@@ -4,12 +4,12 @@ use itertools::Itertools;
 use libmonitor::mccs::features::InputSource;
 use libmonitor::{ddc::DdcDevice, Monitor};
 use serde::{Deserialize, Serialize};
+use std::sync::mpsc::Sender;
 use std::{
     collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
     process::Command,
 };
-use tokio::sync::mpsc::UnboundedSender;
 use wayland_client::backend::ObjectId;
 use wayland_client::protocol::wl_output::Transform;
 
@@ -195,7 +195,7 @@ impl ScreensProfile {
     pub fn apply(
         &self,
         head_config: &HashMap<ObjectId, MonitorInformation>,
-        update_head_channel: &mut UnboundedSender<Vec<(ObjectId, SwayMonitor)>>,
+        update_head_channel: &mut Sender<Vec<(ObjectId, SwayMonitor)>>,
     ) {
         // match connected monitor information with profile monitor configuration
         let mut monitor_map: BTreeMap<
@@ -282,6 +282,11 @@ impl ScreensProfile {
         // write hyprland configuration file
         let mut moved_workspaces = Vec::new();
         swayipc::Connection::new().and_then(|mut sway_ipc| {
+            let current_ws = sway_ipc
+                .get_workspaces()
+                .expect("sway is expected to run and have workspaces")
+                .into_iter()
+                .find_or_first(|ws| ws.focused);
             for (_, hm) in &sway_monitors {
                 if hm.enabled {
                     for ws in &hm.workspaces {
@@ -297,17 +302,32 @@ impl ScreensProfile {
                                 .iter()
                                 .find_or_first(|sway_ws| sway_ws.num == *ws as i32)
                             {
-                                let move_workspace_cmd = swayipc_command_builder::Command::new()
+                                let to_workspace_cmd = swayipc_command_builder::Command::new()
                                     .workspace()
-                                    .name(sway_ws.name.clone())
-                                    .output(format!("output {}", &hm.name));
-                                println!("{move_workspace_cmd}");
+                                    .goto()
+                                    .name(sway_ws.name.clone());
+                                let move_workspace_cmd = swayipc_command_builder::Command::new()
+                                    .sway_move()
+                                    .workspace()
+                                    .to()
+                                    .output()
+                                    .with()
+                                    .name(&hm.name);
+                                let _ = sway_ipc.run_command(to_workspace_cmd);
                                 let _ = sway_ipc.run_command(move_workspace_cmd);
                                 moved_workspaces.push(*ws);
                             }
                         }
                     }
                 }
+            }
+            // move back to previously active workspace
+            if let Some(current_ws) = current_ws {
+                let to_workspace_cmd = swayipc_command_builder::Command::new()
+                    .workspace()
+                    .goto()
+                    .name(current_ws.name);
+                let _ = sway_ipc.run_command(to_workspace_cmd);
             }
             Ok(())
         });
