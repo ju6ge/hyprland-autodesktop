@@ -357,9 +357,9 @@ fn main() {
             let connected_monitors_handler =
                 std::thread::spawn(|| connected_monitor_listen(wlr_rx, head_config_tx));
 
-            wlr_output_updates_blocking.join();
-            connected_monitors_handler.join();
-            commmand_listener_task.join();
+            let _ = wlr_output_updates_blocking.join();
+            let _ = connected_monitors_handler.join();
+            let _ = commmand_listener_task.join();
         }
     }
 }

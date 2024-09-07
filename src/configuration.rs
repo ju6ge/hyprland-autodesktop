@@ -281,7 +281,7 @@ impl ScreensProfile {
 
         // write hyprland configuration file
         let mut moved_workspaces = Vec::new();
-        swayipc::Connection::new().and_then(|mut sway_ipc| {
+        let _ = swayipc::Connection::new().and_then(|mut sway_ipc| {
             let current_ws = sway_ipc
                 .get_workspaces()
                 .expect("sway is expected to run and have workspaces")

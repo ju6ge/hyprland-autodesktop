@@ -10,7 +10,6 @@ use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols_wlr::output_management::{
-    self,
     v1::client::{
         zwlr_output_head_v1::{AdaptiveSyncState, ZwlrOutputHeadV1},
         zwlr_output_mode_v1::ZwlrOutputModeV1,
@@ -152,7 +151,7 @@ impl ScreenManagerState {
         &mut self,
         monitors: Vec<(ObjectId, SwayMonitor)>,
         qh: &QueueHandle<Self>,
-    ) -> () {
+    ) {
         if let Some(ref mut output_management) = self.output_manager {
             let output_configuration =
                 output_management.create_configuration(self.update_serial, qh, ());
