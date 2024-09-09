@@ -166,9 +166,7 @@ impl ScreenManagerState {
                         config.set_scale(desired_config.scale);
                         config.set_transform(desired_config.rotation.into());
                     } else {
-                        output_management
-                            .create_configuration(self.update_serial, qh, ())
-                            .disable_head(&matching_head.head);
+                        output_configuration.disable_head(&matching_head.head);
                     }
                 }
             }
