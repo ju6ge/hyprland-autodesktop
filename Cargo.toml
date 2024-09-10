@@ -9,7 +9,7 @@ edition = "2021"
 anyhow = "1.0.75"
 bincode = "1.3.3"
 clap = { version = "4.3.19", features = ["cargo", "derive"] }
-libmonitor = { version = "0.1.1", features = ["serde"] }
+libmonitor = { version = "0.1.2", features = ["serde"] }
 derive-getters = "0.3.0"
 derive_builder = "0.12.0"
 id_tree = "1.8.0"

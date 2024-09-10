@@ -370,9 +370,9 @@ dependencies = [
 
 [[package]]
 name = "libmonitor"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5441a06e3e5f810c277c7ee83b0eaec362c9aeeb32d2c639c2fc4d9847aff9f"
+checksum = "55bb9adac07d7ce96f8a2a0b9940453fb757a9faf1bd26983a379424cf62ac1a"
 dependencies = [
  "anyhow",
  "i2cdev",
