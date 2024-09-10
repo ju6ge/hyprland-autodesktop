@@ -1,25 +1,29 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, thread::sleep};
 
 use derive_builder::Builder;
 use derive_getters::Getters;
-use tokio::sync::mpsc::UnboundedSender;
+use std::sync::mpsc::{Receiver, Sender};
 use wayland_client::{
     backend::ObjectId,
     event_created_child,
     protocol::{wl_display::WlDisplay, wl_output::Transform, wl_registry},
-    Connection, Dispatch, Proxy,
+    Connection, Dispatch, Proxy, QueueHandle,
 };
-use wayland_protocols_wlr::output_management::v1::client::{
-    zwlr_output_head_v1::{AdaptiveSyncState, ZwlrOutputHeadV1},
-    zwlr_output_mode_v1::ZwlrOutputModeV1,
-    *,
+use wayland_protocols_wlr::output_management::{
+    v1::client::{
+        zwlr_output_head_v1::{AdaptiveSyncState, ZwlrOutputHeadV1},
+        zwlr_output_mode_v1::ZwlrOutputModeV1,
+        *,
+    },
 };
+
+use crate::configuration::SwayMonitor;
 
 #[derive(Builder, Debug, Clone, Getters)]
 #[allow(dead_code)]
 pub struct MonitorMode {
     #[builder(setter(into))]
-    id: ObjectId,
+    mode: ZwlrOutputModeV1,
     #[builder(setter(into))]
     size: (i32, i32),
     #[builder(setter(into))]
@@ -31,7 +35,7 @@ pub struct MonitorMode {
 #[derive(Builder, Debug, Clone, Getters)]
 pub struct MonitorInformation {
     #[builder(setter(into))]
-    id: ObjectId,
+    head: ZwlrOutputHeadV1,
     #[builder(setter(into), default)]
     name: String,
     #[builder(setter(into), default)]
@@ -100,7 +104,7 @@ impl MonitorInformationBuilder {
 
     pub fn from_value(monitor_information: &MonitorInformation) -> Self {
         Self {
-            id: Some(monitor_information.id().clone()),
+            head: Some(monitor_information.head().clone()),
             name: Some(monitor_information.name.clone()),
             model: Some(monitor_information.model.clone()),
             make: Some(monitor_information.make.clone()),
@@ -121,49 +125,79 @@ impl MonitorInformationBuilder {
 struct ScreenManagerState {
     running: bool,
     _display: WlDisplay,
+    update_serial: u32,
     output_manager: Option<zwlr_output_manager_v1::ZwlrOutputManagerV1>,
-    wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInformation>>,
+    wlr_tx: Sender<HashMap<ObjectId, MonitorInformation>>,
+    config_dirty: bool,
     current_head: Option<MonitorInformationBuilder>,
     current_mode: Option<MonitorModeBuilder>,
     current_configuration: HashMap<ObjectId, MonitorInformation>,
 }
 
 impl ScreenManagerState {
-    pub fn new(
-        display: WlDisplay,
-        wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInformation>>,
-    ) -> Self {
+    pub fn new(display: WlDisplay, wlr_tx: Sender<HashMap<ObjectId, MonitorInformation>>) -> Self {
         Self {
             running: true,
             _display: display,
             output_manager: None,
+            update_serial: 0,
             wlr_tx,
+            config_dirty: false,
             current_head: None,
             current_mode: None,
             current_configuration: HashMap::new(),
         }
     }
+
+    pub fn update_head_configuration(
+        &mut self,
+        monitors: Vec<(ObjectId, SwayMonitor)>,
+        qh: &QueueHandle<Self>,
+    ) {
+        if let Some(ref mut output_management) = self.output_manager {
+            let output_configuration =
+                output_management.create_configuration(self.update_serial, qh, ());
+            for (id, desired_config) in monitors {
+                if let Some(matching_head) = self.current_configuration.get(&id) {
+                    println!("updating monitor: {desired_config:#?}");
+                    if desired_config.enabled {
+                        let config = output_configuration.enable_head(&matching_head.head, qh, ());
+                        config.set_position(desired_config.pos_x, desired_config.pos_y);
+                        config.set_scale(desired_config.scale);
+                        config.set_transform(desired_config.rotation.into());
+                    } else {
+                        output_configuration.disable_head(&matching_head.head);
+                    }
+                }
+            }
+            output_configuration.apply();
+        }
+    }
 }
 
 impl ScreenManagerState {
-    pub fn create_new_head(&mut self, id: ObjectId) {
+    pub fn create_new_head(&mut self, head: ZwlrOutputHeadV1) {
         if self.current_head.is_some() {
             self.finish_head();
         }
-        let mut builder = match self.current_configuration.get(&id) {
+        let mut builder = match self.current_configuration.get(&head.id()) {
             Some(mi) => MonitorInformationBuilder::from_value(mi),
-            None => MonitorInformationBuilder::default(),
+            None => {
+                // always set dirty if a completly new head (display) is created
+                self.config_dirty = true;
+                MonitorInformationBuilder::default()
+            },
         };
-        builder.id(id);
+        builder.head(head);
         self.current_head = Some(builder);
     }
 
-    pub fn create_new_mode(&mut self, id: ObjectId) {
+    pub fn create_new_mode(&mut self, mode: ZwlrOutputModeV1) {
         if self.current_mode.is_some() {
             self.finish_mode();
         }
         let mut builder = MonitorModeBuilder::default();
-        builder.id(id);
+        builder.mode(mode);
         self.current_mode = Some(builder);
     }
 
@@ -185,11 +219,10 @@ impl ScreenManagerState {
         self.current_head.take().and_then(|hb| {
             hb.build()
                 .and_then(|h| {
-                    self.current_configuration.insert(h.id().clone(), h);
+                    self.current_configuration.insert(h.head().id(), h);
                     Ok(())
-                }).map_err(|err| {
-                    println!("{err:#?}")
                 })
+                .map_err(|err| println!("{err:#?}"))
                 .ok()
         });
     }
@@ -231,15 +264,19 @@ impl Dispatch<zwlr_output_manager_v1::ZwlrOutputManagerV1, ()> for ScreenManager
     ) {
         match event {
             zwlr_output_manager_v1::Event::Head { head } => {
-                state.create_new_head(head.id());
+                state.create_new_head(head);
             }
-            zwlr_output_manager_v1::Event::Done { serial: _ } => {
+            zwlr_output_manager_v1::Event::Done { serial } => {
+                state.update_serial = serial;
                 state.finish_head();
 
-                let _ = state.wlr_tx.send(state.current_configuration.clone());
+                // only send configuration if changes where detected
+                if state.config_dirty {
+                    state.config_dirty = false;
+                    let _ = state.wlr_tx.send(state.current_configuration.clone());
+                }
             }
-            zwlr_output_manager_v1::Event::Finished => {
-            }
+            zwlr_output_manager_v1::Event::Finished => {}
             _ => { /* Nothing to do here */ }
         }
     }
@@ -276,7 +313,7 @@ impl Dispatch<zwlr_output_head_v1::ZwlrOutputHeadV1, ()> for ScreenManagerState 
                 }
             }
             zwlr_output_head_v1::Event::Mode { mode } => {
-                app_state.create_new_mode(mode.id());
+                app_state.create_new_mode(mode);
             }
             zwlr_output_head_v1::Event::CurrentMode { mode } => {
                 if let Some(ref mut builder) = app_state.current_head.as_mut() {
@@ -348,6 +385,45 @@ impl Dispatch<zwlr_output_head_v1::ZwlrOutputHeadV1, ()> for ScreenManagerState 
     ]);
 }
 
+impl Dispatch<zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1, ()>
+    for ScreenManagerState
+{
+    fn event(
+        _state: &mut Self,
+        _proxy: &zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1,
+        event: <zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1 as Proxy>::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        match event {
+            //TODO figure out if this is useful for anything?
+            _ => { /* nothing to see here */ }
+        }
+    }
+}
+
+impl Dispatch<zwlr_output_configuration_v1::ZwlrOutputConfigurationV1, ()> for ScreenManagerState {
+    fn event(
+        _state: &mut Self,
+        _proxy: &zwlr_output_configuration_v1::ZwlrOutputConfigurationV1,
+        event: <zwlr_output_configuration_v1::ZwlrOutputConfigurationV1 as Proxy>::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qhandle: &QueueHandle<Self>,
+    ) {
+        // TODO should i do something with these events?
+        match event {
+            zwlr_output_configuration_v1::Event::Succeeded => { /*nothing done here yet*/ }
+            zwlr_output_configuration_v1::Event::Failed => { /*nothing done here yet*/ }
+            zwlr_output_configuration_v1::Event::Cancelled => { /*nothing done here yet*/ }
+            _ => {
+                unimplemented!("propbaly an unknown future event has occured and needs a handler!")
+            }
+        }
+    }
+}
+
 impl Dispatch<zwlr_output_mode_v1::ZwlrOutputModeV1, ()> for ScreenManagerState {
     fn event(
         app_state: &mut Self,
@@ -374,14 +450,17 @@ impl Dispatch<zwlr_output_mode_v1::ZwlrOutputModeV1, ()> for ScreenManagerState 
                 }
             }
             zwlr_output_mode_v1::Event::Finished => {
-                //println!("============================================\nFinished");
+                app_state.finish_mode();
             }
             _ => { /* Nothing to do here */ }
         }
     }
 }
 
-pub fn wayland_event_loop(wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInformation>>) {
+pub fn wayland_event_loop(
+    wlr_tx: Sender<HashMap<ObjectId, MonitorInformation>>,
+    config_head_rx: Receiver<Vec<(ObjectId, SwayMonitor)>>,
+) {
     let conn = Connection::connect_to_env().expect("Error connection to wayland session! Are you sure you are using a wayland based window manager?");
 
     let display = conn.display();
@@ -394,6 +473,16 @@ pub fn wayland_event_loop(wlr_tx: UnboundedSender<HashMap<ObjectId, MonitorInfor
     let mut state = ScreenManagerState::new(display, wlr_tx);
 
     while state.running {
-        let _ = wl_events.blocking_dispatch(&mut state);
+        let x = wl_events.roundtrip(&mut state);
+
+        let mut update_event_happend = false;
+        if let Ok(update_head_event) = config_head_rx.try_recv() {
+            update_event_happend = true;
+            state.update_head_configuration(update_head_event, &qh);
+        }
+        // if nothing happend in this loop iteration sleep for a while to save power
+        if !update_event_happend && x.is_ok_and(|num_events| num_events == 0) {
+            sleep(std::time::Duration::from_millis(100));
+        }
     }
 }

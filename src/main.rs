@@ -1,10 +1,10 @@
 use clap::Parser;
-use configuration::{AppConfiguration, ScreensProfile};
-use futures::{future::BoxFuture, FutureExt};
+use configuration::{AppConfiguration, ScreensProfile, SwayMonitor};
 use itertools::Itertools;
 use libmonitor::{ddc::DdcDevice, Monitor};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::{
     collections::{BTreeMap, HashMap},
     env,
@@ -14,8 +14,8 @@ use std::{
     path::{Path, PathBuf},
     process,
     sync::{Arc, RwLock},
+    thread::sleep,
 };
-use tokio::sync::mpsc::{self, UnboundedReceiver};
 use wayland_client::backend::ObjectId;
 use wlr_output_state::MonitorInformation;
 
@@ -57,76 +57,69 @@ impl Default for DaemonState {
 }
 
 fn get_newest_message<'a>(
-    wlr_rx: &'a mut UnboundedReceiver<HashMap<ObjectId, MonitorInformation>>,
-) -> BoxFuture<'a, Result<HashMap<ObjectId, MonitorInformation>, mpsc::error::TryRecvError>> {
-    async move {
-        match wlr_rx.try_recv() {
-            Ok(head_config) => {
-                eprintln!("waiting for new state");
-                tokio::time::sleep(tokio::time::Duration::from_millis(TIMEOUT)).await;
-                match get_newest_message(wlr_rx).await {
-                    Ok(newer_head_conifg) => Ok(newer_head_conifg),
-                    Err(_) => Ok(head_config),
-                }
+    wlr_rx: &'a mut Receiver<HashMap<ObjectId, MonitorInformation>>,
+) -> Result<HashMap<ObjectId, MonitorInformation>, mpsc::TryRecvError> {
+    match wlr_rx.try_recv() {
+        Ok(head_config) => {
+            eprintln!("waiting for new state");
+            sleep(std::time::Duration::from_millis(TIMEOUT));
+            match get_newest_message(wlr_rx) {
+                Ok(newer_head_conifg) => Ok(newer_head_conifg),
+                Err(_) => Ok(head_config),
             }
-            Err(err) => Err(err),
         }
+        Err(err) => Err(err),
     }
-    .boxed()
 }
 
-async fn connected_monitor_listen(
-    mut wlr_rx: UnboundedReceiver<HashMap<ObjectId, MonitorInformation>>,
+fn connected_monitor_listen(
+    mut wlr_rx: Receiver<HashMap<ObjectId, MonitorInformation>>,
+    config_head_tx: Sender<Vec<(ObjectId, SwayMonitor)>>,
 ) {
     loop {
-        if let Some(current_connected_monitors) = get_newest_message(&mut wlr_rx).await.ok() {
+        if let Some(current_connected_monitors) = get_newest_message(&mut wlr_rx).ok() {
             println!(
                 "{:#?}",
                 current_connected_monitors.keys().collect::<Vec<_>>()
             );
-            // run this in its own thread te make sure the runtime does not get blocked!
-            let _ = tokio::task::spawn_blocking(|| {
-                let mut current_monitor_inputs = BTreeMap::new();
-                for mut monitor in Monitor::enumerate() {
-                    if let Ok(monitor_input) = monitor.get_input_source() {
-                        current_monitor_inputs.insert(monitor.handle.name(), monitor_input);
-                    }
+            let mut config_update_tx = config_head_tx.clone();
+            let mut current_monitor_inputs = BTreeMap::new();
+            for mut monitor in Monitor::enumerate() {
+                if let Ok(monitor_input) = monitor.get_input_source() {
+                    current_monitor_inputs.insert(monitor.handle.name(), monitor_input);
                 }
-                let _ = DAEMON_STATE.clone().write().and_then(|mut daemon_state| {
-                    if let Some((profile_name, profile)) = daemon_state
-                        .config
-                        .clone()
-                        .profiles()
-                        .iter()
-                        .filter_map(|(name, profile)| {
-                            eprintln!("Checking if profile {} is connected", name);
-                            if profile
-                                .is_connected(&current_connected_monitors, &current_monitor_inputs)
-                            {
-                                Some((name, profile))
-                            } else {
-                                None
-                            }
-                        })
-                        .sorted_by_key(|profile| profile.1.weight()) // rate matching profiles
-                        .rev() // profile with highest weight should be first
-                        .collect::<Vec<(&String, &ScreensProfile)>>()
-                        .first()
-                    {
-                        let hyprland_config_file =
-                            daemon_state.config.hyprland_config_file().clone();
-                        profile.apply(&current_connected_monitors, &hyprland_config_file);
-                        daemon_state.current_profile = Some(profile_name.to_string());
-                    }
-                    eprintln!("apply configuration!");
-                    daemon_state.head_state = current_connected_monitors;
-                    Ok(())
-                });
-            })
-            .await;
+            }
+            let _ = DAEMON_STATE.clone().write().and_then(|mut daemon_state| {
+                if let Some((profile_name, profile)) = daemon_state
+                    .config
+                    .clone()
+                    .profiles()
+                    .iter()
+                    .filter_map(|(name, profile)| {
+                        eprintln!("Checking if profile {} is connected", name);
+                        if profile
+                            .is_connected(&current_connected_monitors, &current_monitor_inputs)
+                        {
+                            Some((name, profile))
+                        } else {
+                            None
+                        }
+                    })
+                    .sorted_by_key(|profile| profile.1.weight()) // rate matching profiles
+                    .rev() // profile with highest weight should be first
+                    .collect::<Vec<(&String, &ScreensProfile)>>()
+                    .first()
+                {
+                    profile.apply(&current_connected_monitors, &mut config_update_tx);
+                    daemon_state.current_profile = Some(profile_name.to_string());
+                }
+                eprintln!("apply configuration!");
+                daemon_state.head_state = current_connected_monitors;
+                Ok(())
+            });
         } else {
             // timeout here to avoid this read running with cpu at 100% when nothing is happening
-            tokio::time::sleep(tokio::time::Duration::from_millis(TIMEOUT)).await;
+            sleep(std::time::Duration::from_millis(TIMEOUT));
         }
     }
 }
@@ -162,7 +155,11 @@ enum Command {
 }
 
 impl Command {
-    pub fn run(&self, buffer: &mut BufWriter<UnixStream>) {
+    pub fn run(
+        &self,
+        buffer: &mut BufWriter<UnixStream>,
+        config_head_tx: &mut Sender<Vec<(ObjectId, SwayMonitor)>>,
+    ) {
         match self {
             Command::Attached => {
                 let _ = DAEMON_STATE.read().and_then(|daemon_state| {
@@ -227,9 +224,7 @@ impl Command {
                     {
                         Some(profile) => {
                             let head_config = daemon_state.head_state.clone();
-                            let hyprland_config_file =
-                                daemon_state.config.hyprland_config_file().clone();
-                            profile.apply(&head_config, &hyprland_config_file);
+                            profile.apply(&head_config, config_head_tx);
                             daemon_state.current_profile = Some(profile_selector.name.clone());
                         }
                         None => {
@@ -244,7 +239,7 @@ impl Command {
     }
 }
 
-fn command_listener() {
+fn command_listener(mut head_config_tx: Sender<Vec<(ObjectId, SwayMonitor)>>) {
     let _ = UnixListener::bind(SOCKET_ADDR.as_str()).and_then(|socket_server| {
         for connection in socket_server.incoming() {
             let _ = connection.and_then(|mut stream| {
@@ -254,7 +249,7 @@ fn command_listener() {
                 match recv_command {
                     Ok(command) => {
                         let mut buffer = BufWriter::new(stream);
-                        command.run(&mut buffer);
+                        command.run(&mut buffer, &mut head_config_tx);
                     }
                     Err(err) => {
                         let mut buffer = BufWriter::new(stream);
@@ -288,8 +283,7 @@ fn check_socket_alive() -> bool {
             .unwrap_or(false)
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let cmd_options = Options::parse();
 
     match cmd_options.command {
@@ -348,20 +342,24 @@ async fn main() {
                 let _ = std::fs::remove_file(&socket_path);
             }
 
-            let (wlr_tx, wlr_rx) =
-                mpsc::unbounded_channel::<HashMap<ObjectId, MonitorInformation>>();
-            let wlr_output_updates_blocking = tokio::task::spawn_blocking(|| {
-                wlr_output_state::wayland_event_loop(wlr_tx);
+            let (wlr_tx, wlr_rx) = mpsc::channel::<HashMap<ObjectId, MonitorInformation>>();
+
+            let (head_config_tx, head_config_rx) = mpsc::channel::<Vec<(ObjectId, SwayMonitor)>>();
+
+            let head_config_command_tx = head_config_tx.clone();
+
+            let wlr_output_updates_blocking = std::thread::spawn(|| {
+                wlr_output_state::wayland_event_loop(wlr_tx, head_config_rx);
             });
-            let commmand_listener_task = tokio::task::spawn_blocking(|| {
-                command_listener();
+            let commmand_listener_task = std::thread::spawn(|| {
+                command_listener(head_config_command_tx);
             });
-            let connected_monitors_handler = tokio::task::spawn(connected_monitor_listen(wlr_rx));
-            let _ = tokio::join!(
-                wlr_output_updates_blocking,
-                connected_monitors_handler,
-                commmand_listener_task
-            );
+            let connected_monitors_handler =
+                std::thread::spawn(|| connected_monitor_listen(wlr_rx, head_config_tx));
+
+            let _ = wlr_output_updates_blocking.join();
+            let _ = connected_monitors_handler.join();
+            let _ = commmand_listener_task.join();
         }
     }
 }
